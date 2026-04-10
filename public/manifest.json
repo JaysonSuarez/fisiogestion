@@ -1,0 +1,21 @@
+{
+  "name": "FisioGestión Pink",
+  "short_name": "FisioGestión",
+  "description": "Sistema de gestión para pacientes y sesiones de fisioterapia.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff1f2",
+  "theme_color": "#ec4899",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3063/3063176.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3063/3063176.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
