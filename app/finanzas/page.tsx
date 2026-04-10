@@ -2,9 +2,10 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Wallet, TrendingUp, AlertCircle, X, Loader2, DollarSign, Activity, CheckCircle, CreditCard, Sparkles } from 'lucide-react'
+import { Wallet, TrendingUp, AlertCircle, X, Loader2, DollarSign, Activity, CheckCircle, CreditCard, Sparkles, Trash2, Calendar } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import NotificationModal from '@/components/ui/NotificationModal'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 const formatCOP = (valor: number) => {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
@@ -18,17 +19,22 @@ function FinanzasContent() {
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   
   const [sesiones, setSesiones] = useState<any[]>([])
   const [pacientesDeudores, setPacientesDeudores] = useState<any[]>([])
+  const [selectedPatient, setSelectedPatient] = useState<any>(null)
   
   const [idSeleccionado, setIdSeleccionado] = useState('')
   const [montoAbono, setMontoAbono] = useState('')
   const [metodoPago, setMetodoPago] = useState('efectivo')
+  
+  // Confirmation State
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
 
   // Notification State
-  const [notification, setNotification] = useState<{isOpen: boolean, type: 'success' | 'error', title: string, message: string}>({
+  const [notification, setNotification] = useState<{isOpen: boolean, type: 'success' | 'error' | 'info', title: string, message: string}>({
     isOpen: false,
     type: 'success',
     title: '',
@@ -51,7 +57,7 @@ function FinanzasContent() {
 
       const { data: pendientes } = await supabase
         .from('sesiones')
-        .select('paciente_id, valor, monto_pagado, pacientes(nombre)')
+        .select('id, paciente_id, valor, monto_pagado, fecha, pacientes(nombre)')
       
       const deudoresRaw = pendientes?.filter(s => (s.monto_pagado || 0) < s.valor) || []
       
@@ -63,11 +69,18 @@ function FinanzasContent() {
             id: s.paciente_id,
             nombre: p?.nombre ?? 'Desconocido',
             deudaTotal: 0,
-            sesionesPendientes: 0
+            sesionesPendientes: 0,
+            detalleSesiones: []
           }
         }
         agrupados[s.paciente_id].deudaTotal += (s.valor - (s.monto_pagado || 0))
         agrupados[s.paciente_id].sesionesPendientes += 1
+        agrupados[s.paciente_id].detalleSesiones.push({
+          id: s.id,
+          fecha: s.fecha,
+          valor: s.valor,
+          pagado: s.monto_pagado || 0
+        })
       })
 
       setPacientesDeudores(Object.values(agrupados).sort((a: any, b: any) => b.deudaTotal - a.deudaTotal))
@@ -150,6 +163,34 @@ function FinanzasContent() {
     }
   }
 
+  async function handleDeleteSession(sessionId: string) {
+    try {
+      const { error: deleteError } = await supabase
+        .from('sesiones')
+        .delete()
+        .eq('id', sessionId)
+
+      if (deleteError) throw deleteError
+      
+      setNotification({
+        isOpen: true,
+        type: 'success',
+        title: 'Sesión Eliminada',
+        message: 'La sesión ha sido eliminada del historial.'
+      })
+      
+      // Update local state if needed (loadData will be called by realtime)
+    } catch (err: any) {
+      console.error(err)
+      setNotification({
+        isOpen: true,
+        type: 'error',
+        title: 'Error al Eliminar',
+        message: 'No pudimos eliminar la sesión.'
+      })
+    }
+  }
+
   if (loading && sesiones.length === 0) {
     return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-rose-500" size={40} /></div>
   }
@@ -162,6 +203,14 @@ function FinanzasContent() {
         type={notification.type}
         title={notification.title}
         message={notification.message}
+      />
+
+      <ConfirmModal 
+        isOpen={!!sessionToDelete}
+        onClose={() => setSessionToDelete(null)}
+        onConfirm={() => sessionToDelete && handleDeleteSession(sessionToDelete)}
+        title="¿Eliminar Sesión?"
+        message="¿Estás seguro de que deseas eliminar este registro? Esto cancelará la deuda asociada a esta sesión."
       />
 
       <header className="topbar mb-10">
@@ -224,16 +273,28 @@ function FinanzasContent() {
                    <div className="text-rose-300 text-[9px] uppercase font-black tracking-widest mb-1">Deuda pendiente</div>
                    <div className="text-3xl font-black text-rose-950 tracking-tighter">{formatCOP(p.deudaTotal)}</div>
                 </div>
-                <button 
-                  onClick={() => {
-                    setIdSeleccionado(p.id)
-                    setIsModalOpen(true)
-                  }}
-                  className="w-12 h-12 bg-rose-950 text-rose-100 rounded-2xl hover:bg-rose-600 hover:text-white transition-all shadow-lg active:scale-90 flex items-center justify-center"
-                  title="Cobrar Ahora"
-                >
-                  <DollarSign size={24} />
-                </button>
+                <div className="flex gap-2">
+                   <button 
+                    onClick={() => {
+                      setSelectedPatient(p)
+                      setIsDetailModalOpen(true)
+                    }}
+                    className="w-12 h-12 bg-rose-50 text-rose-400 rounded-2xl hover:bg-rose-100 hover:text-rose-600 transition-all active:scale-90 flex items-center justify-center border border-rose-100"
+                    title="Ver/Eliminar Sesiones"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setIdSeleccionado(p.id)
+                      setIsModalOpen(true)
+                    }}
+                    className="w-12 h-12 bg-rose-950 text-rose-100 rounded-2xl hover:bg-rose-600 hover:text-white transition-all shadow-lg active:scale-90 flex items-center justify-center"
+                    title="Cobrar Ahora"
+                  >
+                    <DollarSign size={24} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -246,8 +307,9 @@ function FinanzasContent() {
         </div>
       </div>
 
+      {/* Modal Registrar Pago */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-rose-950/40 backdrop-blur-md px-4 p-4">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-rose-950/40 backdrop-blur-md px-4 p-4 transition-all">
           <div className="bg-white rounded-[40px] shadow-[0_32px_64px_-16px_rgba(225,29,72,0.2)] w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300">
             <div className="px-8 py-6 border-b border-rose-50 flex justify-between items-center bg-rose-50/20">
               <h3 className="font-black text-xl text-rose-950 uppercase tracking-tighter">Registrar Pago</h3>
@@ -308,6 +370,62 @@ function FinanzasContent() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Modal Detalle/Eliminar Sesiones */}
+      {isDetailModalOpen && selectedPatient && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-rose-950/40 backdrop-blur-md px-4 p-4">
+           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+              <div className="px-8 py-6 border-b border-rose-50 flex justify-between items-center bg-rose-50/20">
+                <div>
+                   <h3 className="font-black text-xl text-rose-950 uppercase tracking-tighter">Sesiones Pendientes</h3>
+                   <p className="text-[10px] font-black text-rose-300 uppercase tracking-widest">{selectedPatient.nombre}</p>
+                </div>
+                <button onClick={() => setIsDetailModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white shadow-sm text-rose-300 hover:text-rose-500 transition-colors"><X size={20} /></button>
+              </div>
+              
+              <div className="p-8 max-h-[400px] overflow-y-auto space-y-4 custom-scrollbar">
+                 {selectedPatient.detalleSesiones.map((s: any) => (
+                    <div key={s.id} className="card p-5 border border-rose-50 hover:border-rose-200 transition-all group">
+                       <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-4">
+                             <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500">
+                                <Calendar size={20} />
+                             </div>
+                             <div>
+                                <div className="text-xs font-black text-rose-950 uppercase tracking-tight">{new Date(s.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}</div>
+                                <div className="text-[10px] font-black text-rose-300 uppercase tracking-widest">{formatCOP(s.valor)} — Pendiente</div>
+                             </div>
+                          </div>
+                          <button 
+                            onClick={() => setSessionToDelete(s.id)}
+                            className="p-3 text-rose-200 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                            title="Eliminar esta sesión"
+                          >
+                             <Trash2 size={18} />
+                          </button>
+                       </div>
+                    </div>
+                 ))}
+                 {selectedPatient.detalleSesiones.length === 0 && (
+                   <p className="text-center py-10 text-rose-300 font-bold text-sm">No hay sesiones pendientes.</p>
+                 )}
+              </div>
+              
+              <div className="p-8 border-t border-rose-50 bg-rose-50/10">
+                 <button 
+                  onClick={() => {
+                    setIsDetailModalOpen(false)
+                    setIdSeleccionado(selectedPatient.id)
+                    setIsModalOpen(true)
+                  }}
+                  className="w-full py-4 bg-rose-950 text-white font-black rounded-2xl hover:bg-rose-600 transition-all text-xs uppercase tracking-[0.2em]"
+                >
+                    Ir a Cobrar Todo
+                 </button>
+              </div>
+           </div>
         </div>
       )}
     </div>
