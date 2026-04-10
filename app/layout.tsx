@@ -3,9 +3,13 @@ import './globals.css'
 import Sidebar from '@/components/layout/Sidebar'
 
 export const metadata: Metadata = {
-  title: 'FisioGestión Pink',
+  title: 'FisioGestión',
   description: 'Panel de gestión para fisioterapeutas',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -25,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <head>
-        <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3063/3063176.png" />
+        <link rel="icon" href="/logo.png" />
       </head>
       <body>
         <div className="app-layout">
