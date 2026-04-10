@@ -27,6 +27,7 @@ export default function NuevoPacientePage() {
     const nombre = formData.get('nombre') as string
     const telefono = formData.get('telefono') as string
     const diagnostico = formData.get('diagnostico') as string
+    const edad = parseInt(formData.get('edad') as string)
     const estado = formData.get('estado') as string
     const notas_iniciales = formData.get('notas_iniciales') as string
 
@@ -36,6 +37,7 @@ export default function NuevoPacientePage() {
         .insert([{ 
           nombre, 
           telefono, 
+          edad,
           diagnostico, 
           estado,
           notas_iniciales 
@@ -128,6 +130,12 @@ export default function NuevoPacientePage() {
                 <option value="activo">Activo</option>
                 <option value="en_pausa">En pausa</option>
               </select>
+            </div>
+            <div className="form-group">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
+                Edad (Años)
+              </label>
+              <input name="edad" className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-slate-50 text-slate-800 font-bold" type="number" placeholder="Ej: 25" />
             </div>
           </div>
 

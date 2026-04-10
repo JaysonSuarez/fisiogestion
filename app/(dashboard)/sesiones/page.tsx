@@ -109,6 +109,10 @@ export default function SesionesPage() {
     setLocalCitas(localCitas.map(c => c.id === id ? { ...c, fecha: newDate } : c))
   }
 
+  const handleCompleteLocalSession = (id: string) => {
+    setLocalCitas(localCitas.map(c => c.id === id ? { ...c, estado: 'completada' } : c))
+  }
+
   const savePlanChanges = async () => {
     setSaving(true)
     try {
@@ -135,10 +139,10 @@ export default function SesionesPage() {
         if (delError) throw delError
       }
 
-      // Update existing ones (only date for simplicity, could add time too)
+      // Update existing ones (only date and status)
       const toUpdate = localCitas.filter(c => !c.isNew)
       for (const c of toUpdate) {
-        await supabase.from('citas').update({ fecha: c.fecha }).eq('id', c.id)
+        await supabase.from('citas').update({ fecha: c.fecha, estado: c.estado }).eq('id', c.id)
       }
 
       // Insert new ones
@@ -369,17 +373,27 @@ export default function SesionesPage() {
                                  className="bg-white px-4 py-2 rounded-xl text-xs font-black text-rose-950 border border-rose-100 outline-none focus:border-rose-300"
                                />
                                <div className="flex items-center justify-between gap-4">
-                                  <span className={`text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${cita.estado === 'completada' || cita.estado === 'completado' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}>
-                                     {cita.estado}
-                                  </span>
-                                  {cita.estado !== 'completada' && cita.estado !== 'completado' && (
-                                     <button 
-                                       onClick={() => handleRemoveLocalSession(cita.id)}
-                                       className="p-2 text-rose-200 hover:text-rose-500 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                     >
-                                        <Trash2 size={16} />
-                                     </button>
-                                  )}
+                                 <div className="flex items-center gap-2">
+                                   <span className={`text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${cita.estado === 'completada' || cita.estado === 'completado' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}>
+                                      {cita.estado}
+                                   </span>
+                                   {cita.estado !== 'completada' && cita.estado !== 'completado' && (
+                                      <button 
+                                        onClick={() => handleCompleteLocalSession(cita.id)}
+                                        className="text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-rose-600 text-white hover:bg-rose-700 transition-colors flex items-center gap-1"
+                                      >
+                                         <CheckCircle size={10} /> Completar
+                                      </button>
+                                   )}
+                                 </div>
+                                 {cita.estado !== 'completada' && cita.estado !== 'completado' && (
+                                    <button 
+                                      onClick={() => handleRemoveLocalSession(cita.id)}
+                                      className="p-2 text-rose-200 hover:text-rose-500 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                    >
+                                       <Trash2 size={16} />
+                                    </button>
+                                 )}
                                </div>
                             </div>
                          </div>

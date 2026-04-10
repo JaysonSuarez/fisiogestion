@@ -20,6 +20,7 @@ import {
   Flower,
   Sprout
 } from 'lucide-react'
+import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 
 const formatCOP = (valor: number) => {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
@@ -127,6 +128,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+
+      <SolicitudesWidget />
 
       {/* Metrics Section */}
       <section className="metric-grid gap-8">
