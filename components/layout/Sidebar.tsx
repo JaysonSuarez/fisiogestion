@@ -3,16 +3,18 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, CalendarDays, Wallet,
-  ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars
+  ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars, Settings, FileText
 } from 'lucide-react'
 
 const navItems = [
   { href: '/',          label: 'Inicio',      icon: LayoutDashboard },
   { href: '/pacientes', label: 'Pacientes',   icon: Users },
+  { href: '/evaluaciones', label: 'Evaluaciones', icon: FileText },
   { href: '/sesiones',  label: 'Planes',      icon: ClipboardList },
   { href: '/agenda',    label: 'Calendario',  icon: CalendarDays },
   { href: '/finanzas',  label: 'Finanzas',    icon: Wallet },
   { href: '/diezmo',    label: 'Diezmo',      icon: Heart },
+  { href: '/ajustes',   label: 'Ajustes',     icon: Settings },
 ]
 
 export default function Sidebar() {
@@ -30,7 +32,7 @@ export default function Sidebar() {
           <Sprout size={140} />
         </div>
 
-        <div className="sidebar-logo mb-12 relative z-10">
+        <div className="sidebar-logo mb-1 relative z-10">
           <div className="w-14 h-14 bg-rose-600 rounded-[22px] flex items-center justify-center text-white shadow-2xl shadow-rose-200 animate-pulse border-4 border-white">
             <Sparkles size={28} fill="currentColor" />
           </div>

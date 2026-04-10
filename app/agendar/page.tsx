@@ -11,16 +11,17 @@ import {
 
 // ─── Precios estáticos según número de sesiones ───────────────────────────────
 const PLANES_PRECIOS = [
-  { sesiones: 1,  precio: 70000,   label: 'Descarga Muscular' },
-  { sesiones: 1,  precio: 80000,   label: '1 sesión fisioterapia' },
-  { sesiones: 3,  precio: 150000,  label: '3 sesiones' },
-  { sesiones: 4,  precio: 180000,  label: '4 sesiones' },
-  { sesiones: 5,  precio: 200000,  label: '5 sesiones' },
-  { sesiones: 10, precio: 400000,  label: '10 sesiones' },
-  { sesiones: 15, precio: 580000,  label: '15 sesiones' },
-  { sesiones: 20, precio: 700000,  label: '20 sesiones' },
-  { sesiones: 25, precio: 840000,  label: '25 sesiones' },
-  { sesiones: 30, precio: 1000000, label: '30 sesiones' },
+  { id: 'evaluacion', sesiones: 1, precio: 30000,  label: 'Evaluación' },
+  { id: 'descarga', sesiones: 1,  precio: 70000,   label: 'Descarga Muscular' },
+  { id: 'fisio-1',  sesiones: 1,  precio: 80000,   label: '1 sesión fisioterapia' },
+  { id: 'fisio-3',  sesiones: 3,  precio: 150000,  label: '3 sesiones' },
+  { id: 'fisio-4',  sesiones: 4,  precio: 200000,  label: '4 sesiones' },
+  { id: 'fisio-5',  sesiones: 5,  precio: 250000,  label: '5 sesiones' },
+  { id: 'fisio-10', sesiones: 10, precio: 500000,  label: '10 sesiones' },
+  { id: 'fisio-15', sesiones: 15, precio: 750000,  label: '15 sesiones' },
+  { id: 'fisio-20', sesiones: 20, precio: 1000000, label: '20 sesiones' },
+  { id: 'fisio-25', sesiones: 25, precio: 1250000, label: '25 sesiones' },
+  { id: 'fisio-30', sesiones: 30, precio: 1500000, label: '30 sesiones' },
 ]
 
 const HORARIOS_DISPONIBLES = [
@@ -43,6 +44,9 @@ export default function AgendarPage() {
   // Form fields
   const [nombre, setNombre] = useState('')
   const [apellido, setApellido] = useState('')
+  const [tipoDocumento, setTipoDocumento] = useState('CC')
+  const [documentoNumero, setDocumentoNumero] = useState('')
+  const [sexo, setSexo] = useState('Femenino')
   const [edad, setEdad] = useState('')
   const [telefono, setTelefono] = useState('')
   const [diagnostico, setDiagnostico] = useState('')
@@ -117,6 +121,9 @@ export default function AgendarPage() {
         .insert([{
           nombre,
           apellido,
+          tipo_documento: tipoDocumento,
+          documento_numero: documentoNumero,
+          sexo,
           edad: parseInt(edad),
           telefono,
           diagnostico,
@@ -150,7 +157,7 @@ export default function AgendarPage() {
           Agenda tu Cita
         </h1>
         <p className="text-rose-400 font-bold text-xs uppercase tracking-widest">
-          Fisioterapia · Liliana González
+          Fisioterapeuta · Liliana González
         </p>
       </div>
 
@@ -210,7 +217,45 @@ export default function AgendarPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Tipo Doc. *</label>
+                <select
+                  value={tipoDocumento}
+                  onChange={e => setTipoDocumento(e.target.value)}
+                  className="w-full bg-rose-50/50 border border-rose-100 rounded-2xl px-4 py-3 text-sm font-bold text-rose-950 outline-none focus:border-rose-300 transition-all appearance-none"
+                >
+                  <option value="CC">C.C.</option>
+                  <option value="TI">T.I.</option>
+                  <option value="RC">R.C.</option>
+                  <option value="Pasaporte">Pasaporte</option>
+                  <option value="CE">C.E.</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2 space-y-1.5">
+                <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Número de documento *</label>
+                <input
+                  value={documentoNumero}
+                  onChange={e => setDocumentoNumero(e.target.value)}
+                  className="w-full bg-rose-50/50 border border-rose-100 rounded-2xl px-4 py-3 text-sm font-bold text-rose-950 outline-none focus:border-rose-300 transition-all"
+                  placeholder="Ej: 1010..."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Sexo *</label>
+                <select
+                  value={sexo}
+                  onChange={e => setSexo(e.target.value)}
+                  className="w-full bg-rose-50/50 border border-rose-100 rounded-2xl px-4 py-3 text-sm font-bold text-rose-950 outline-none focus:border-rose-300 transition-all appearance-none"
+                >
+                  <option value="Femenino">Femenino</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Edad *</label>
                 <input
@@ -246,7 +291,7 @@ export default function AgendarPage() {
 
             <button
               onClick={() => setStep('plan')}
-              disabled={!nombre || !apellido || !edad || !telefono || !diagnostico}
+              disabled={!nombre || !apellido || !edad || !telefono || !diagnostico || !documentoNumero}
               className="w-full py-4 bg-rose-950 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-rose-950/20 hover:bg-rose-900 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               Siguiente <ChevronRight size={16} />
@@ -265,10 +310,10 @@ export default function AgendarPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {PLANES_PRECIOS.map(plan => (
                 <button
-                  key={plan.sesiones}
+                  key={plan.id}
                   onClick={() => { setPlanSeleccionado(plan); setSlotsSeleccionados([]) }}
                   className={`p-5 rounded-[24px] border-2 text-left transition-all active:scale-95 ${
-                    planSeleccionado?.sesiones === plan.sesiones
+                    planSeleccionado?.id === plan.id
                       ? 'border-rose-400 bg-rose-50 shadow-lg shadow-rose-100'
                       : 'border-rose-50 bg-rose-50/30 hover:border-rose-100'
                   }`}
@@ -281,11 +326,16 @@ export default function AgendarPage() {
                           {formatCOP(Math.round(plan.precio / plan.sesiones))} / sesión
                         </div>
                       )}
+                      {plan.id === 'fisio-1' && (
+                        <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
+                          {formatCOP(plan.precio)} / sesión
+                        </div>
+                      )}
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                      planSeleccionado?.sesiones === plan.sesiones ? 'border-rose-500 bg-rose-500' : 'border-rose-200'
+                      planSeleccionado?.id === plan.id ? 'border-rose-500 bg-rose-500' : 'border-rose-200'
                     }`}>
-                      {planSeleccionado?.sesiones === plan.sesiones && <CheckCircle size={14} className="text-white" />}
+                      {planSeleccionado?.id === plan.id && <CheckCircle size={14} className="text-white" />}
                     </div>
                   </div>
                   <div className="font-black text-2xl text-rose-600 tracking-tighter mt-2">{formatCOP(plan.precio)}</div>

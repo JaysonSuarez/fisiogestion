@@ -142,16 +142,16 @@ export default function DiezmoPage() {
           </div>
         </div>
 
-        <div className="card bg-rose-600 border-none p-8 relative overflow-hidden group shadow-xl shadow-rose-200">
-          <div className="absolute -right-6 -bottom-6 text-rose-500 opacity-30 group-hover:scale-110 transition-transform duration-500">
+        <div className="card bg-gradient-to-br from-white to-rose-50 border-2 border-rose-100 p-8 relative overflow-hidden group shadow-xl shadow-rose-100/20">
+          <div className="absolute -right-6 -bottom-6 text-rose-100 opacity-30 group-hover:scale-110 transition-transform duration-500">
              <Heart size={140} fill="currentColor" />
           </div>
-          <div className="relative z-10 text-white">
-            <div className="w-12 h-12 bg-white/20 text-white rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md">
+          <div className="relative z-10">
+            <div className="w-12 h-12 bg-white text-rose-500 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-rose-50">
               <Wallet size={24} />
             </div>
-            <span className="text-[10px] font-black text-rose-100 uppercase tracking-widest block mb-2">Diezmo Acumulado (10%)</span>
-            <div className="text-5xl font-black text-white tracking-tighter">{formatCOP(totalDiezmo)}</div>
+            <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest block mb-2">Diezmo Acumulado (10%)</span>
+            <div className="text-5xl font-black text-rose-950 tracking-tighter">{formatCOP(totalDiezmo)}</div>
           </div>
         </div>
       </section>

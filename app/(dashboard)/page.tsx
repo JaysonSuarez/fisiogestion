@@ -14,6 +14,8 @@ import {
   MoreVertical,
   Clock,
   Loader2,
+  Activity,
+  MessageCircle,
   Sparkles,
   Heart,
   Flower2,
@@ -31,8 +33,13 @@ export default function DashboardPage() {
     porCobrar: 0,
     ingresoTotal: 0,
     diezmoTotal: 0,
-    deudores: []
+    deudores: [],
+    solicitudesCount: 0
   })
+
+  // Control de recordatorios
+  const [activeReminder, setActiveReminder] = useState<any>(null)
+  const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set())
 
   async function loadDashboard() {
     const now = new Date()
@@ -45,7 +52,7 @@ export default function DashboardPage() {
 
     const { data: citasHoyRaw } = await supabase
       .from('citas')
-      .select('*, pacientes(nombre)')
+      .select('*, pacientes(nombre, telefono)')
       .eq('fecha', todayStr)
       .neq('estado', 'cancelada')
 
@@ -70,13 +77,19 @@ export default function DashboardPage() {
     })
     const deudores = Object.values(deudoresMap).sort((a, b) => b.deuda - a.deuda).slice(0, 3)
 
+    const { count: solicitudesCount } = await supabase
+      .from('solicitudes')
+      .select('*', { count: 'exact', head: true })
+      .eq('estado', 'pendiente')
+
     setData({
       pacientesActivos: pacientesActivos || 0,
       citasHoy: citasHoyRaw || [],
       porCobrar,
       ingresoTotal: ingresoGlobal,
       diezmoTotal: Math.round(ingresoDiezmoActual * 0.1),
-      deudores
+      deudores,
+      solicitudesCount: solicitudesCount || 0
     })
     setLoading(false)
   }
@@ -88,12 +101,87 @@ export default function DashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sesiones' }, () => loadDashboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'citas' }, () => loadDashboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes' }, () => loadDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes' }, () => loadDashboard())
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
   }, [])
+
+  // Solicitar permisos de notificación
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) return
+    if (Notification.permission === 'default') {
+      await Notification.requestPermission()
+    }
+  }
+
+  // Pedir permiso al inicio
+  useEffect(() => {
+    requestNotificationPermission()
+  }, [])
+
+  // Monitor de recordatorios (revisa cada 30 segundos)
+  useEffect(() => {
+    const checkReminders = () => {
+      if (activeReminder) return 
+
+      const currentTime = new Date()
+      data.citasHoy.forEach((cita: any) => {
+        if (cita.estado === 'completado' || cita.estado === 'cancelada') return
+
+        const [hours, minutes] = cita.hora_inicio.split(':').map(Number)
+        const citaTime = new Date()
+        citaTime.setHours(hours, minutes, 0, 0)
+
+        const diff = citaTime.getTime() - currentTime.getTime()
+        const minsRemaining = Math.floor(diff / 60000)
+
+        // Fase 1: 1 Hora antes (entre 50 y 65 min)
+        const id1h = `${cita.id}-1h`
+        if (minsRemaining > 50 && minsRemaining <= 65 && !remindedIds.has(id1h)) {
+          setActiveReminder({ ...cita, phase: '1h' })
+        } 
+        // Fase 2: 10 Minutos antes (entre 5 y 15 min)
+        else {
+          const id10m = `${cita.id}-10m`
+          if (minsRemaining > 0 && minsRemaining <= 15 && !remindedIds.has(id10m)) {
+            setActiveReminder({ ...cita, phase: '10m' })
+          }
+        }
+      })
+    }
+    
+    // Al activar un recordatorio, disparar notificación
+    if (activeReminder && !remindedIds.has(`${activeReminder.id}-${activeReminder.phase}`)) {
+      const isUltimoMinuto = activeReminder.phase === '10m'
+      const titulo = isUltimoMinuto ? '¡Cita en 10 minutos! 🚨' : '¡Recordatorio de Cita! ⏰'
+      
+      if ('Notification' in window && Notification.permission === 'granted') {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(titulo, {
+            body: `Cita con ${activeReminder.pacientes?.nombre} a las ${format12h(activeReminder.hora_inicio)}.`,
+            icon: '/icon-192x192.png',
+            tag: `reminder-${activeReminder.id}-${activeReminder.phase}`,
+            requireInteraction: true
+          })
+        })
+      }
+    }
+
+    const interval = setInterval(checkReminders, 30000)
+    return () => clearInterval(interval)
+  }, [data.citasHoy, remindedIds, activeReminder])
+
+  const dismissReminder = (id: string, phase: string) => {
+    setRemindedIds(prev => {
+      const next = new Set(prev)
+      next.add(`${id}-${phase}`)
+      return next
+    })
+    setActiveReminder(null)
+  }
 
   const now = new Date()
 
@@ -115,7 +203,7 @@ export default function DashboardPage() {
         <div>
           <h2 className="font-display italic text-6xl mb-2 text-rose-950 flex items-center gap-4">
             <Sparkles className="text-rose-400 animate-pulse" size={40} />
-            Hola, Liliana
+            Hola, Ft. Liliana
           </h2>
           <div className="flex items-center gap-2">
             <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">
@@ -152,25 +240,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card metric-card border-none bg-rose-600 text-white shadow-2xl shadow-rose-200 relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 text-white/5 group-hover:scale-110 transition-transform">
-            <Sparkles size={100} />
-          </div>
-          <div className="relative z-10">
-            <div className="p-3 bg-white/20 text-white rounded-2xl w-fit mb-6 backdrop-blur-md border border-white/10"><AlertCircle size={24} /></div>
-            <span className="text-[10px] font-black text-rose-100 uppercase tracking-widest block mb-1">Por cobrar</span>
-            <div className="text-3xl font-black">{formatCOP(data.porCobrar)}</div>
-          </div>
-        </div>
-
-        <div className="card metric-card border-none bg-rose-950 text-white shadow-2xl relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 text-white/5 group-hover:scale-110 transition-transform">
+        <div className="card metric-card border-none bg-white shadow-xl shadow-rose-100/30 relative overflow-hidden group border border-rose-50">
+          <div className="absolute -right-4 -top-4 text-rose-100/20 group-hover:scale-110 transition-transform">
             <TrendingUp size={100} />
           </div>
           <div className="relative z-10">
-            <div className="p-3 bg-rose-500/20 text-rose-400 rounded-2xl w-fit mb-6 backdrop-blur-md border border-rose-500/10"><TrendingUp size={24} /></div>
-            <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest block mb-1">Total recaudado</span>
-            <div className="text-3xl font-black">{formatCOP(data.ingresoTotal)}</div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl w-fit mb-6 shadow-sm"><TrendingUp size={24} /></div>
+            <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Total recaudado</span>
+            <div className="text-4xl font-black text-rose-950 tracking-tighter">{formatCOP(data.ingresoTotal)}</div>
+          </div>
+        </div>
+
+        <div className="card metric-card border-none bg-rose-50/50 shadow-xl shadow-rose-100/10 relative overflow-hidden group border border-rose-100/50">
+          <div className="absolute -right-4 -top-4 text-rose-200/20 group-hover:scale-110 transition-transform">
+            <Activity size={100} />
+          </div>
+          <div className="relative z-10">
+            <div className="p-3 bg-white text-rose-500 rounded-2xl w-fit mb-6 shadow-sm"><Activity size={24} /></div>
+            <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Solicitudes</span>
+            <div className="text-4xl font-black text-rose-950 tracking-tighter">{data.solicitudesCount}</div>
           </div>
         </div>
       </section>
@@ -203,9 +291,25 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <span className="badge bg-rose-50 text-rose-500 text-[9px] font-black px-4 py-1.5 rounded-2xl uppercase italic border border-rose-100/50">
-                    {cita.estado}
-                  </span>
+                  
+                  <div className="flex items-center gap-2">
+                    {p.telefono && (
+                      <a 
+                        href={`https://wa.me/57${p.telefono.replace(/\s/g, '')}?text=${encodeURIComponent(
+                          `Hola *${p.nombre}* 👋, te recordamos tu sesión de hoy con la Fisio Liliana González a las *${format12h(cita.hora_inicio)}*. ¡Te esperamos! ✨`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                        title="Enviar recordatorio WhatsApp"
+                      >
+                        <MessageCircle size={16} />
+                      </a>
+                    )}
+                    <span className="badge bg-rose-50 text-rose-500 text-[9px] font-black px-4 py-1.5 rounded-2xl uppercase italic border border-rose-100/50">
+                      {cita.estado}
+                    </span>
+                  </div>
                 </div>
               )
             })}
@@ -249,48 +353,95 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="card bg-rose-950 border-none p-10 text-white shadow-2xl overflow-hidden relative group rounded-[40px]">
-            <div className="absolute -right-4 -bottom-4 w-48 h-48 bg-rose-600/30 rounded-full blur-[80px] group-hover:scale-125 transition-transform duration-1000"></div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/5 -z-0">
+          <div className="card bg-gradient-to-br from-white to-rose-50 border-2 border-rose-100 p-10 shadow-xl shadow-rose-100/20 overflow-hidden relative group rounded-[40px]">
+            <div className="absolute -right-4 -bottom-4 w-48 h-48 bg-rose-200/20 rounded-full blur-[80px] group-hover:scale-125 transition-transform duration-1000"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-rose-100/30 -z-0">
                <Heart size={200} fill="currentColor" />
             </div>
             
             <div className="flex-between mb-10 relative z-10">
               <div className="flex items-center gap-3">
-                 <div className="p-3 bg-rose-500/20 rounded-2xl text-rose-400 backdrop-blur-md border border-rose-500/20">
+                 <div className="p-3 bg-white rounded-2xl text-rose-500 shadow-sm border border-rose-100">
                   <Heart size={22} fill="currentColor" />
                 </div>
-                <h3 className="text-rose-100 font-black uppercase tracking-[0.2em] text-[10px]">Diezmo Especial</h3>
+                <h3 className="text-rose-950 font-black uppercase tracking-[0.2em] text-[10px]">Diezmo Especial</h3>
               </div>
             </div>
             
             <div className="space-y-8 relative z-10">
               <div className="flex justify-between items-end">
                 <div>
-                  <div className="text-rose-400/60 text-[9px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
+                  <div className="text-rose-500 text-[9px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
                     Ofrenda (10%) <Sparkles size={10} />
                   </div>
-                  <div className="text-5xl font-black text-white tracking-tighter mb-1">{formatCOP(data.diezmoTotal)}</div>
-                  <div className="text-[8px] text-rose-500 font-bold uppercase tracking-widest italic opacity-80">Sincronizado con tus bendiciones</div>
+                  <div className="text-5xl font-black text-rose-950 tracking-tighter mb-1">{formatCOP(data.diezmoTotal)}</div>
+                  <div className="text-[8px] text-rose-400 font-bold uppercase tracking-widest italic">Sincronizado con tus bendiciones</div>
                 </div>
               </div>
 
-              <div className="pt-6 border-t border-white/5 space-y-4">
-                <div className="flex justify-between text-[10px] font-black text-rose-400 mb-1 uppercase tracking-[0.2em]">
+              <div className="pt-6 border-t border-rose-200/50 space-y-4">
+                <div className="flex justify-between text-[10px] font-black text-rose-500 mb-1 uppercase tracking-[0.2em]">
                   <span>RECAUDO TOTAL</span>
-                  <span className="text-white">{formatCOP(data.ingresoTotal)}</span>
+                  <span className="text-rose-950 font-black">{formatCOP(data.ingresoTotal)}</span>
                 </div>
-                <div className="h-3 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-full w-full opacity-80"></div>
+                <div className="h-3 bg-white rounded-full overflow-hidden border border-rose-100">
+                  <div className="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-full w-full"></div>
                 </div>
                 <div className="flex justify-center">
-                   <Flower size={16} className="text-rose-900/50" />
+                   <Flower size={16} className="text-rose-200" />
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ── MODAL DE RECORDATORIO AUTOMÁTICO ── */}
+      {activeReminder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-rose-950/40 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[48px] p-10 shadow-2xl shadow-rose-950/40 border border-rose-100 relative overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="absolute -right-10 -top-10 text-rose-50/50">
+              <Flower size={200} />
+            </div>
+            
+            <div className="relative z-10 text-center">
+              <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-[32px] flex items-center justify-center mx-auto mb-6 shadow-inner ring-4 ring-emerald-100/50 animate-bounce">
+                <MessageCircle size={32} fill="currentColor" />
+              </div>
+              
+              <h2 className="text-3xl font-black text-rose-950 tracking-tighter mb-2 uppercase italic">
+                {activeReminder.phase === '10m' ? '¡Ya casi empieza!' : '¡Es hora de avisar!'}
+              </h2>
+              <p className="text-rose-400 font-medium text-sm mb-8 leading-relaxed px-4">
+                La cita con <span className="font-black text-rose-600 tracking-tight">{activeReminder.pacientes?.nombre}</span> es {activeReminder.phase === '10m' ? 'en solo 10 minutos' : 'en 1 hora'}.
+              </p>
+
+              <div className="space-y-4">
+                <a 
+                  href={`https://wa.me/57${activeReminder.pacientes?.telefono?.replace(/\s/g, '')}?text=${encodeURIComponent(
+                    activeReminder.phase === '10m' 
+                      ? `Hola *${activeReminder.pacientes?.nombre}* 👋, ya estamos casi listos para tu sesión de las *${format12h(activeReminder.hora_inicio)}*. ¡Vente con cuidado!`
+                      : `Hola *${activeReminder.pacientes?.nombre}* 👋, paso por aquí para recordarte tu sesión de hoy a las *${format12h(activeReminder.hora_inicio)}*. ¡Ya casi nos vemos! ✨`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => dismissReminder(activeReminder.id, activeReminder.phase)}
+                  className={`block w-full py-5 ${activeReminder.phase === '10m' ? 'bg-rose-600' : 'bg-emerald-500'} hover:opacity-90 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3`}
+                >
+                  <Sparkles size={18} /> {activeReminder.phase === '10m' ? 'AVISAR LLEGADA' : 'ENVIAR RECORDATORIO'}
+                </a>
+
+                <button 
+                  onClick={() => dismissReminder(activeReminder.id, activeReminder.phase)}
+                  className="w-full py-4 bg-white border border-rose-100 text-rose-300 hover:text-rose-400 hover:bg-rose-50 rounded-[20px] font-black text-[9px] uppercase tracking-widest transition-all"
+                >
+                  Ya lo envié, presiona aquí
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

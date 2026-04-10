@@ -30,6 +30,12 @@ export default function NuevoPacientePage() {
     const edad = parseInt(formData.get('edad') as string)
     const estado = formData.get('estado') as string
     const notas_iniciales = formData.get('notas_iniciales') as string
+    
+    const tipoDoc = formData.get('tipo_documento') as string
+    const numDoc = formData.get('documento_numero') as string
+    const documento_identidad = numDoc ? `${tipoDoc} ${numDoc}` : ''
+    
+    const sexo = formData.get('sexo') as string
 
     try {
       const { error: insertError } = await supabase
@@ -40,7 +46,9 @@ export default function NuevoPacientePage() {
           edad,
           diagnostico, 
           estado,
-          notas_iniciales 
+          notas_iniciales,
+          documento_identidad,
+          sexo
         }])
 
       if (insertError) throw insertError
@@ -111,6 +119,33 @@ export default function NuevoPacientePage() {
                 Teléfono de contacto
               </label>
               <input name="telefono" className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-slate-50 text-slate-800 font-bold" type="tel" placeholder="300 000 0000" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="form-group">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
+                Documento de identidad
+              </label>
+              <div className="flex gap-2">
+                <select name="tipo_documento" className="w-[100px] px-4 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold shadow-sm">
+                  <option value="CC">CC</option>
+                  <option value="TI">TI</option>
+                  <option value="RC">RC</option>
+                  <option value="CE">CE</option>
+                </select>
+                <input name="documento_numero" className="flex-1 px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-slate-50 text-slate-800 font-bold" type="text" placeholder="123456789" />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
+                Sexo
+              </label>
+              <select name="sexo" className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold shadow-sm">
+                <option value="">Seleccionar...</option>
+                <option value="M">Masculino (M)</option>
+                <option value="F">Femenino (F)</option>
+              </select>
             </div>
           </div>
 

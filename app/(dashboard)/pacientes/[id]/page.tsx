@@ -68,6 +68,9 @@ export default function EditarPacientePage() {
       diagnostico: formData.get('diagnostico') as string,
       estado: formData.get('estado') as string,
       notas_iniciales: formData.get('notas_iniciales') as string,
+      edad: formData.get('edad') ? parseInt(formData.get('edad') as string) : null,
+      sexo: formData.get('sexo') as string,
+      documento_identidad: formData.get('documento_numero') ? `${formData.get('tipo_documento')} ${formData.get('documento_numero')}` : formData.get('documento_identidad_raw') as string,
     }
 
     try {
@@ -151,10 +154,16 @@ export default function EditarPacientePage() {
           <Link href="/pacientes" className="p-3 bg-white border border-slate-100 rounded-2xl hover:bg-slate-50 transition-all shadow-sm group">
             <ArrowLeft size={20} className="text-slate-400 group-hover:text-indigo-600" />
           </Link>
-          <div>
+          <div className="flex-1">
             <h2 className="font-display italic text-5xl mb-1 text-slate-900">Perfil del Paciente</h2>
             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest italic">Gestión exhaustiva de paciente</p>
           </div>
+          <Link
+            href={`/pacientes/${id}/evaluacion`}
+            className="px-5 py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-200 hover:bg-rose-700 transition-all flex items-center gap-2 active:scale-95"
+          >
+            <FileText size={16} /> Evaluación
+          </Link>
         </div>
       </header>
 
@@ -202,6 +211,51 @@ export default function EditarPacientePage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="form-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Documento de identidad</label>
+                  <div className="flex gap-2">
+                    <select 
+                      name="tipo_documento" 
+                      defaultValue={patient.documento_identidad?.split(' ')[0] || 'CC'}
+                      className="w-[90px] px-3 py-4 rounded-2xl border-2 border-slate-50 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold appearance-none cursor-pointer"
+                    >
+                      <option value="CC">CC</option>
+                      <option value="TI">TI</option>
+                      <option value="RC">RC</option>
+                      <option value="CE">CE</option>
+                    </select>
+                    <input 
+                      name="documento_numero" 
+                      defaultValue={patient.documento_identidad?.includes(' ') ? patient.documento_identidad.split(' ').slice(1).join(' ') : patient.documento_identidad}
+                      className="flex-1 px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-indigo-500 outline-none font-bold text-slate-900 bg-slate-50/30 transition-all" 
+                      type="text"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Sexo</label>
+                  <select 
+                    name="sexo" 
+                    defaultValue={patient.sexo || ''}
+                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold appearance-none cursor-pointer"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="M">Masculino (M)</option>
+                    <option value="F">Femenino (F)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="form-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Edad (Años)</label>
+                  <input 
+                    name="edad" 
+                    type="number"
+                    defaultValue={patient.edad}
+                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-indigo-500 outline-none font-bold text-slate-900 bg-slate-50/30 transition-all" 
+                  />
+                </div>
                 <div className="form-group">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Estado</label>
                   <select 

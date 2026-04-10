@@ -12,6 +12,7 @@ import { formatCOP, getIniciales } from '@/lib/utils'
 export default function SesionesPage() {
   const [loading, setLoading] = useState(true)
   const [sesiones, setSesiones] = useState<any[]>([])
+  const [showHistory, setShowHistory] = useState(false)
   
   // Edit State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -56,8 +57,22 @@ export default function SesionesPage() {
   }, [])
 
   const totalHoras = sesiones.reduce((a, s) => a + (s.duracion_minutos || 0), 0) / 60
-  const pagadasCount = sesiones.filter(s => s.estado_pago === 'pagado').length
-  const pendientesCount = sesiones.filter(s => s.estado_pago === 'pendiente').length
+  
+  const planesProcesados = sesiones.map(s => {
+    const citas = s.citas || []
+    const completadas = citas.filter((c: any) => {
+      const st = (c.estado || '').toLowerCase().trim()
+      return st === 'completado' || st === 'completada'
+    }).length
+    const total = citas.length
+    const esCompletado = total > 0 && completadas >= total
+    return { ...s, completadas, total, esCompletado }
+  })
+
+  const completadasCount = planesProcesados.filter(p => p.esCompletado).length || 0
+  const pendientesCount = planesProcesados.filter(p => !p.esCompletado).length || 0
+  
+  const filtradas = planesProcesados.filter(p => showHistory ? p.esCompletado : !p.esCompletado)
 
   const openEditModal = (plan: any) => {
     setSelectedPlan(plan)
@@ -197,10 +212,19 @@ export default function SesionesPage() {
           </h2>
           <p className="text-rose-400 font-bold text-xs uppercase tracking-widest leading-none">Historial de tratamientos y sesiones</p>
         </div>
-        <Link href="/sesiones/nueva" className="btn-primary !bg-rose-600 hover:!bg-rose-700 !shadow-rose-100 flex items-center gap-2 !rounded-2xl !py-3">
-          <Sparkles size={18} />
-          <span className="hidden sm:inline text-xs font-black uppercase">Crear Nuevo Plan</span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowHistory(!showHistory)}
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${showHistory ? 'bg-rose-950 text-white shadow-xl shadow-rose-950/20' : 'bg-rose-50 text-rose-400 hover:bg-rose-100'}`}
+          >
+            <Clock size={16} />
+            {showHistory ? 'Ver Activos' : 'Ver Historial'}
+          </button>
+          <Link href="/sesiones/nueva" className="btn-primary !bg-rose-600 hover:!bg-rose-700 !shadow-rose-100 flex items-center gap-2 !rounded-2xl !py-3">
+            <Sparkles size={18} />
+            <span className="hidden sm:inline text-xs font-black uppercase">Crear Nuevo Plan</span>
+          </Link>
+        </div>
       </header>
 
       <section className="metric-grid gap-6 mb-12">
@@ -220,12 +244,12 @@ export default function SesionesPage() {
           <div className="text-2xl font-black text-rose-950">{totalHoras.toFixed(1)} h</div>
         </div>
 
-        <div className="card metric-card border-none bg-rose-600 text-white shadow-xl shadow-rose-200">
-          <div className="p-3 bg-white/20 text-white rounded-2xl w-fit mb-4 backdrop-blur-md">
+        <div className="card metric-card border-none bg-white shadow-xl shadow-rose-100/30 relative overflow-hidden group border border-rose-50">
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl w-fit mb-4">
              <CheckCircle size={20} />
           </div>
-          <span className="text-[10px] font-black text-rose-100 uppercase tracking-widest block mb-1">Completadas</span>
-          <div className="text-2xl font-black">{pagadasCount}</div>
+          <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Completadas</span>
+          <div className="text-2xl font-black text-rose-950">{completadasCount}</div>
         </div>
 
         <div className="card metric-card border-none bg-rose-50 text-rose-600 shadow-lg shadow-rose-100/20">
@@ -238,30 +262,28 @@ export default function SesionesPage() {
       </section>
 
       <div className="space-y-4">
-        {sesiones.map(s => {
+        {filtradas.map(s => {
           const p = s.pacientes as any
-          const citasDelPlan = s.citas || []
-          const totalCitas = citasDelPlan.length
-          const citasCompletadas = citasDelPlan.filter((c: any) => c.estado === 'completado' || c.estado === 'completada').length
+          const { completadas, total, esCompletado } = s
           
           return (
-            <div key={s.id} className="card group hover:shadow-xl transition-all border-2 border-transparent hover:border-rose-100 border-l-rose-500 border-l-4">
+            <div key={s.id} className={`card group hover:shadow-xl transition-all border-2 border-transparent border-l-4 ${esCompletado ? 'hover:border-slate-100 border-l-slate-400 bg-slate-50/30' : 'hover:border-rose-100 border-l-rose-500'}`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs uppercase group-hover:bg-rose-600 transition-colors">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xs uppercase transition-colors ${esCompletado ? 'bg-slate-200 text-slate-500' : 'bg-slate-900 text-white group-hover:bg-rose-600'}`}>
                     {p ? getIniciales(p.nombre) : '?'}
                   </div>
                   <div className="flex-1">
                     <div className="font-black text-rose-950 text-xl tracking-tighter uppercase group-hover:text-rose-600 transition-colors">
                       {p?.nombre ?? 'Paciente eliminado'}
                     </div>
-                    {totalCitas > 0 ? (
+                    {total > 0 ? (
                       <div className="mt-1 flex items-center gap-2">
-                        <span className="text-[10px] font-black text-rose-500 uppercase tracking-[0.2em] bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
-                          Sesión {citasCompletadas}/{totalCitas}
+                        <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border transition-colors ${esCompletado ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                          {esCompletado ? 'Tratamiento Finalizado' : `Sesión ${completadas}/${total}`}
                         </span>
                         <div className="flex-1 w-24 h-1.5 bg-rose-50 rounded-full overflow-hidden">
-                          <div className="h-full bg-rose-400" style={{ width: `${(citasCompletadas/totalCitas)*100}%` }}></div>
+                          <div className={`h-full transition-all duration-500 ${esCompletado ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${(completadas/total)*100}%` }}></div>
                         </div>
                       </div>
                     ) : (
@@ -301,9 +323,9 @@ export default function SesionesPage() {
             </div>
           )
         })}
-        {sesiones.length === 0 && (
+        {filtradas.length === 0 && (
           <div className="py-20 text-center rounded-[40px] bg-rose-50/50 border-2 border-dashed border-rose-100">
-            <p className="text-rose-300 font-black text-xs uppercase tracking-widest italic">✨ Empieza creando tu primer plan de tratamiento</p>
+            <p className="text-rose-300 font-black text-xs uppercase tracking-widest italic">{showHistory ? 'No hay planes en el historial' : '✨ Empieza creando tu primer plan de tratamiento'}</p>
           </div>
         )}
       </div>

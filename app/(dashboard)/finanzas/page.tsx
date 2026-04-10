@@ -240,8 +240,8 @@ function FinanzasContent() {
         </div>
 
         <div className="card metric-card bg-rose-50 border-none shadow-lg shadow-rose-100/20 group">
-          <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Cartera Pendiente</span>
-          <div className="text-2xl font-black text-rose-600">{formatCOP(porCobrar)}</div>
+          <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-1">Por Cobrar</span>
+          <div className="text-2xl font-black text-rose-600 font-display">{formatCOP(porCobrar)}</div>
           <AlertCircle className="absolute right-4 bottom-4 text-rose-500/10 group-hover:scale-125 transition-transform" size={48} />
         </div>
       </section>
