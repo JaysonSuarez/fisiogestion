@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Wallet, TrendingUp, AlertCircle, X, Loader2, DollarSign, Activity, CheckCircle, CreditCard, Sparkles } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
@@ -14,7 +14,7 @@ const getIniciales = (nombre: string) => {
   return nombre.split(' ').map(n => n[0]).slice(0, 2).join('')
 }
 
-export default function FinanzasPage() {
+function FinanzasContent() {
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -208,21 +208,21 @@ export default function FinanzasPage() {
             <div key={p.id} className="card group hover:shadow-2xl transition-all border-2 border-transparent hover:border-rose-100 border-l-rose-500 border-l-4 flex flex-col justify-between p-6">
               <div>
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs group-hover:bg-rose-600 transition-colors uppercase">{getIniciales(p.nombre)}</div>
-                  <div className="flex-1">
-                    <div className="font-black text-rose-950 group-hover:text-rose-600 transition-colors uppercase tracking-tight text-lg">{p.nombre}</div>
-                    <div className="text-[9px] items-center gap-1 text-rose-500 font-black uppercase tracking-tighter bg-rose-50 px-2 py-0.5 rounded-full inline-flex border border-rose-100">
-                      <CreditCard size={10} />
-                      {p.sesionesPendientes} sesiones
-                    </div>
-                  </div>
+                   <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs group-hover:bg-rose-600 transition-colors uppercase">{getIniciales(p.nombre)}</div>
+                   <div className="flex-1">
+                     <div className="font-black text-rose-950 group-hover:text-rose-600 transition-colors uppercase tracking-tight text-lg">{p.nombre}</div>
+                     <div className="text-[9px] items-center gap-1 text-rose-500 font-black uppercase tracking-tighter bg-rose-50 px-2 py-0.5 rounded-full inline-flex border border-rose-100">
+                       <CreditCard size={10} />
+                       {p.sesionesPendientes} sesiones
+                     </div>
+                   </div>
                 </div>
               </div>
               
               <div className="flex justify-between items-end mt-4 pt-4 border-t border-rose-50">
                 <div>
-                  <div className="text-rose-300 text-[9px] uppercase font-black tracking-widest mb-1">Deuda pendiente</div>
-                  <div className="text-3xl font-black text-rose-950 tracking-tighter">{formatCOP(p.deudaTotal)}</div>
+                   <div className="text-rose-300 text-[9px] uppercase font-black tracking-widest mb-1">Deuda pendiente</div>
+                   <div className="text-3xl font-black text-rose-950 tracking-tighter">{formatCOP(p.deudaTotal)}</div>
                 </div>
                 <button 
                   onClick={() => {
@@ -311,5 +311,13 @@ export default function FinanzasPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function FinanzasPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin text-rose-500" size={40} /></div>}>
+      <FinanzasContent />
+    </Suspense>
   )
 }
