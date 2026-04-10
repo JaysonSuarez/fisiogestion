@@ -11,7 +11,8 @@ import {
 
 // ─── Precios estáticos según número de sesiones ───────────────────────────────
 const PLANES_PRECIOS = [
-  { sesiones: 1,  precio: 80000,   label: '1 sesión' },
+  { sesiones: 1,  precio: 70000,   label: 'Descarga Muscular' },
+  { sesiones: 1,  precio: 80000,   label: '1 sesión fisioterapia' },
   { sesiones: 3,  precio: 150000,  label: '3 sesiones' },
   { sesiones: 4,  precio: 180000,  label: '4 sesiones' },
   { sesiones: 5,  precio: 200000,  label: '5 sesiones' },
@@ -281,10 +282,12 @@ export default function AgendarPage() {
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="font-black text-rose-950 text-lg tracking-tighter">{plan.sesiones} sesion(nes)</div>
-                      <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
-                        {formatCOP(Math.round(plan.precio / plan.sesiones))} / sesión
-                      </div>
+                      <div className="font-black text-rose-950 text-lg tracking-tighter uppercase">{plan.label}</div>
+                      {plan.sesiones > 1 && (
+                        <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
+                          {formatCOP(Math.round(plan.precio / plan.sesiones))} / sesión
+                        </div>
+                      )}
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                       planSeleccionado?.sesiones === plan.sesiones ? 'border-rose-500 bg-rose-500' : 'border-rose-200'

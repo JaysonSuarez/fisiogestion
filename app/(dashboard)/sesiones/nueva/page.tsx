@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -24,14 +24,16 @@ const DAYS_OF_WEEK = [
 export default function NuevaSesionPage({
   searchParams,
 }: {
-  searchParams: { paciente?: string }
+  searchParams: Promise<{ paciente?: string }>
 }) {
   const router = useRouter()
+  const resolvedParams = use(searchParams)
+  
   const [loading, setLoading] = useState(false)
   const [fetchingPacientes, setFetchingPacientes] = useState(true)
   const [pacientes, setPacientes] = useState<any[]>([])
   
-  const [pacienteId, setPacienteId] = useState(searchParams.paciente ?? '')
+  const [pacienteId, setPacienteId] = useState(resolvedParams.paciente ?? '')
   const [cantidadSesiones, setCantidadSesiones] = useState<number>(1)
   const [valorPorSesion, setValorPorSesion] = useState<number>(80000)
 
@@ -68,24 +70,34 @@ export default function NuevaSesionPage({
     loadPacientes()
   }, [])
 
-  const opcionesSesiones = [1, 5, 10, 15, 20, 25, 30]
+  const opcionesSesiones = [
+    { value: 1, label: '1 Sesión Fisioterapia', type: 'fisioterapia' },
+    { value: 1, label: '1 Descarga Muscular', type: 'descarga' },
+    { value: 5, label: '5 Sesiones', type: 'fisioterapia' },
+    { value: 10, label: '10 Sesiones', type: 'fisioterapia' },
+    { value: 15, label: '15 Sesiones', type: 'fisioterapia' },
+    { value: 20, label: '20 Sesiones', type: 'fisioterapia' },
+    { value: 25, label: '25 Sesiones', type: 'fisioterapia' },
+    { value: 30, label: '30 Sesiones', type: 'fisioterapia' },
+  ]
 
-  const getMinPrice = (cantidad: number) => {
+  const [tipoPlan, setTipoPlan] = useState('fisioterapia')
+
+  const getMinPrice = (cantidad: number, type: string) => {
+    if (type === 'descarga') return 70000
     if (cantidad === 1) return 80000
     if (cantidad === 5) return 50000
     return 40000 
   }
 
-  const handleCambioSesiones = (cantidad: number) => {
-    setCantidadSesiones(cantidad)
-    const minPrice = getMinPrice(cantidad)
-    if (valorPorSesion < minPrice || valorPorSesion === getMinPrice(cantidadSesiones)) {
-      setValorPorSesion(minPrice)
-    }
+  const handleCambioSesiones = (val: number, type: string) => {
+    setCantidadSesiones(val)
+    setTipoPlan(type)
+    const minPrice = getMinPrice(val, type)
+    setValorPorSesion(minPrice)
   }
 
   const handleCambioValor = (val: number) => {
-    if (cantidadSesiones === 1) return 
     setValorPorSesion(val)
   }
 
@@ -137,7 +149,7 @@ export default function NuevaSesionPage({
         monto_pagado: hizoAbono ? abonoRestante : 0,
         metodo_pago: hizoAbono ? metodoPago : null,
         estado_pago: (hizoAbono && abonoRestante >= valorTotal) ? 'pagado' : 'pendiente',
-        nota_clinica: `[Plan de ${cantidadSesiones} sesiones] ${nota_clinica}`,
+        nota_clinica: `[Plan de ${tipoPlan === 'descarga' ? 'Descarga Muscular' : cantidadSesiones + ' sesiones'}] ${nota_clinica}`,
         duracion_minutos: 60 * cantidadSesiones
       }]).select('id').single()
 
@@ -276,12 +288,15 @@ export default function NuevaSesionPage({
                 <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Sesiones</label>
                 <select 
                   className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-white font-black text-rose-600 shadow-sm appearance-none"
-                  value={cantidadSesiones}
-                  onChange={(e) => handleCambioSesiones(Number(e.target.value))}
+                  value={`${cantidadSesiones}-${tipoPlan}`}
+                  onChange={(e) => {
+                    const [val, type] = e.target.value.split('-')
+                    handleCambioSesiones(Number(val), type)
+                  }}
                   required
                 >
-                  {opcionesSesiones.map(num => (
-                    <option key={num} value={num}>{num} {num === 1 ? 'sesión' : 'sesiones'}</option>
+                  {opcionesSesiones.map((opt, idx) => (
+                    <option key={idx} value={`${opt.value}-${opt.type}`}>{opt.label}</option>
                   ))}
                 </select>
               </div>
@@ -291,11 +306,10 @@ export default function NuevaSesionPage({
                 <div className="relative">
                   <span className="absolute left-6 top-1/2 -translate-y-1/2 text-rose-100 font-black">$</span>
                   <input 
-                    className={`w-full pl-10 pr-6 py-4 rounded-[24px] border-2 border-rose-50 focus:ring-4 outline-none font-black text-rose-900 transition-all ${cantidadSesiones === 1 ? 'bg-rose-50/50 text-rose-200' : 'focus:border-rose-400 focus:ring-rose-50 bg-white'}`}
+                    className="w-full pl-10 pr-6 py-4 rounded-[24px] border-2 border-rose-50 focus:ring-4 outline-none font-black text-rose-900 transition-all focus:border-rose-400 focus:ring-rose-50 bg-white"
                     type="number" 
                     value={valorPorSesion || ''} 
                     onChange={e => handleCambioValor(Number(e.target.value))}
-                    disabled={cantidadSesiones === 1}
                     required 
                   />
                 </div>

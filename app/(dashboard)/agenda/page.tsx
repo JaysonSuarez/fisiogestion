@@ -123,7 +123,14 @@ export default function AgendaPage() {
           .from('citas')
           .update({ estado: 'completada' })
           .eq('id', verificationCita.id)
+        
         if (error) throw error
+        
+        // Update local state immediately to avoid the race condition in useEffect
+        setCitas(prev => prev.map(c => 
+          c.id === verificationCita.id ? { ...c, estado: 'completada' } : c
+        ))
+        
         setVerificationCita(null)
         setNotification({
           isOpen: true,
@@ -131,11 +138,20 @@ export default function AgendaPage() {
           title: 'Sesión Completada',
           message: 'La cita ha sido marcada como completada correctamente.'
         })
+        
+        // Also trigger a full reload to be double sure
+        await loadCitas()
       } else {
         setIsRescheduling(true)
       }
     } catch (err) {
       console.error(err)
+      setNotification({
+        isOpen: true,
+        type: 'error',
+        title: 'Error al actualizar',
+        message: 'No pudimos marcar la asistencia. Inténtalo de nuevo.'
+      })
     } finally {
       setSaving(false)
     }
@@ -150,11 +166,18 @@ export default function AgendaPage() {
         .update({ 
           fecha: rescheduleData.fecha, 
           hora_inicio: rescheduleData.hora,
-          estado: 'pendiente' // Regresa a pendiente al ser reprogramada
+          estado: 'pendiente'
         })
         .eq('id', verificationCita.id)
       
       if (error) throw error
+
+      // Update local state
+      setCitas(prev => prev.map(c => 
+        c.id === verificationCita.id 
+          ? { ...c, fecha: rescheduleData.fecha, hora_inicio: rescheduleData.hora, estado: 'pendiente' } 
+          : c
+      ))
       
       setVerificationCita(null)
       setIsRescheduling(false)
@@ -164,8 +187,16 @@ export default function AgendaPage() {
         title: 'Cita Reprogramada',
         message: 'La cita se ha movido exitosamente.'
       })
+
+      await loadCitas()
     } catch (err) {
       console.error(err)
+      setNotification({
+        isOpen: true,
+        type: 'error',
+        title: 'Error al reprogramar',
+        message: 'No pudimos mover la cita. Inténtalo de nuevo.'
+      })
     } finally {
       setSaving(false)
     }
