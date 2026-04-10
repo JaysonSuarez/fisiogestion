@@ -7,13 +7,7 @@ import { ClipboardPlus, Activity, CheckCircle, Clock, AlertCircle, Loader2, Spar
 import NotificationModal from '@/components/ui/NotificationModal'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
-const formatCOP = (valor: number) => {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
-}
-
-const getIniciales = (nombre: string) => {
-  return nombre.split(' ').map(n => n[0]).slice(0, 2).join('')
-}
+import { formatCOP, getIniciales } from '@/lib/utils'
 
 export default function SesionesPage() {
   const [loading, setLoading] = useState(true)

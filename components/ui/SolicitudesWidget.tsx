@@ -7,15 +7,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import NotificationModal from '@/components/ui/NotificationModal'
 
-const formatCOP = (v: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v)
-
-const format12h = (h: string) => {
-  if (!h) return ''
-  const [hh, mm] = h.split(':').map(Number)
-  const p = hh < 12 ? 'AM' : 'PM'
-  return `${hh % 12 || 12}:${mm.toString().padStart(2, '0')} ${p}`
-}
+import { formatCOP, format12h } from '@/lib/utils'
 
 export default function SolicitudesWidget() {
   const [solicitudes, setSolicitudes] = useState<any[]>([])

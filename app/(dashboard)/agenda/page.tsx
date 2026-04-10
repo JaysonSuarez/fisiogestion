@@ -19,18 +19,7 @@ import {
   Calendar
 } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
-
-const getIniciales = (nombre: string) => {
-  return nombre.split(' ').map(n => n[0]).slice(0, 2).join('')
-}
-
-const format12h = (hora24: string) => {
-  if (!hora24) return ''
-  const [h, m] = hora24.split(':').map(Number)
-  const period = h < 12 ? 'AM' : 'PM'
-  const h12 = h % 12 || 12
-  return `${h12}:${m.toString().padStart(2, '0')} ${period}`
-}
+import { format12h, getIniciales } from '@/lib/utils'
 
 export default function AgendaPage() {
   const [loading, setLoading] = useState(true)

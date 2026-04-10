@@ -28,14 +28,7 @@ const HORARIOS_DISPONIBLES = [
   '14:00', '15:00', '16:00', '17:00'
 ]
 
-const format12h = (h: string) => {
-  const [hh, mm] = h.split(':').map(Number)
-  const p = hh < 12 ? 'AM' : 'PM'
-  return `${hh % 12 || 12}:${mm.toString().padStart(2, '0')} ${p}`
-}
-
-const formatCOP = (v: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v)
+import { format12h, formatCOP } from '@/lib/utils'
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
 type Step = 'datos' | 'plan' | 'fechas' | 'confirmar' | 'enviado'

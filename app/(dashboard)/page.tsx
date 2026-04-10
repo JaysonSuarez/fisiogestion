@@ -21,10 +21,7 @@ import {
   Sprout
 } from 'lucide-react'
 import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
-
-const formatCOP = (valor: number) => {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
-}
+import { formatCOP, format12h, getIniciales } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -194,7 +191,7 @@ export default function DashboardPage() {
             {data.citasHoy.map((cita: any) => {
               const p = cita.pacientes as any
               if (!p) return null
-              const initials = p.nombre.split(' ').map((n: string) => n[0]).slice(0, 2).join('')
+              const initials = getIniciales(p.nombre)
               return (
                 <div key={cita.id} className="flex items-center justify-between p-5 hover:bg-white rounded-[32px] transition-all border border-transparent hover:border-rose-100 hover:shadow-lg shadow-rose-100/20 group">
                   <div className="flex items-center gap-5">
@@ -202,7 +199,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="font-black text-rose-950 group-hover:text-rose-600 transition-colors uppercase tracking-tight text-lg">{p.nombre}</div>
                       <div className="text-[10px] text-rose-300 font-bold uppercase tracking-widest flex items-center gap-2">
-                        <Clock size={12} /> {cita.hora_inicio.slice(0, 5)} · {cita.duracion_minutos} MIN
+                        <Clock size={12} /> {format12h(cita.hora_inicio)} · {cita.duracion_minutos} MIN
                       </div>
                     </div>
                   </div>
