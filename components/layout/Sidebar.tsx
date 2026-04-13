@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useRef, useEffect } from 'react'
 import {
   LayoutDashboard, Users, CalendarDays, Wallet,
   ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars, Settings, FileText
@@ -19,6 +20,16 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      const activeItem = scrollRef.current.querySelector('.active-mobile-item')
+      if (activeItem) {
+        activeItem.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+      }
+    }
+  }, [pathname])
 
   return (
     <>
@@ -78,20 +89,35 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="mobile-nav !bg-white/90 !backdrop-blur-3xl !border-rose-100/50 !h-20 items-center px-6">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/' && pathname.startsWith(href))
-          return (
-            <Link key={href} href={href} className={`mobile-nav-item transition-all duration-300 flex flex-col items-center gap-1 ${active ? 'active !text-rose-600 -translate-y-2' : '!text-rose-200'}`}>
-              <div className={`${active ? 'p-2 bg-rose-50 rounded-2xl shadow-inner' : ''}`}>
-                <Icon strokeWidth={active ? 3 : 2} size={active ? 24 : 22} />
-              </div>
-              <span className={`text-[8px] font-black uppercase tracking-tighter ${active ? 'opacity-100' : 'opacity-40'}`}>{label}</span>
-            </Link>
-          )
-        })}
-      </nav>
+      {/* Mobile Bottom Nav - Liquid Glass Floating Pill with Camera-like Scroll */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-md lg:hidden">
+        <nav className="relative bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] overflow-hidden">
+          <div 
+            ref={scrollRef}
+            className="flex items-center overflow-x-auto scroll-smooth no-scrollbar snap-x snap-mandatory py-2 px-4 gap-2"
+          >
+            {navItems.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || (href !== '/' && pathname.startsWith(href))
+              return (
+                <Link 
+                  key={href} 
+                  href={href} 
+                  className={`relative flex items-center gap-2 px-6 py-3 rounded-full transition-all duration-500 snap-center shrink-0 ${
+                    active ? 'active-mobile-item bg-rose-950 text-white shadow-lg scale-105' : 'text-rose-900/60 hover:text-rose-900'
+                  }`}
+                >
+                  <Icon strokeWidth={active ? 3 : 2} size={active ? 18 : 20} className={active ? 'animate-pulse' : ''} />
+                  <span className={`text-[10px] font-black uppercase tracking-[0.15em] whitespace-nowrap transition-all duration-300 ${
+                    active ? 'max-w-[200px] opacity-100 ml-1' : 'max-w-0 opacity-0 overflow-hidden'
+                  }`}>
+                    {label}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
     </>
   )
 }

@@ -60,6 +60,11 @@ h1, h2, h3 {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+::selection { background: var(--c-primary-soft); color: var(--c-primary); }
+
+/* Utilities */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Layout principal */
 .app-layout {
@@ -188,7 +193,7 @@ h1, h2, h3 {
   .main-content {
     margin-left: 0;
     padding: 1.25rem;
-    padding-bottom: 5rem; /* Space for mobile nav */
+    padding-bottom: 8rem; /* Space for floating mobile nav */
   }
 }
 
