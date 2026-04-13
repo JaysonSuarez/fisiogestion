@@ -123,7 +123,7 @@ export default function DashboardPage() {
   // Solicitar permisos de notificación
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) return
-    if (Notification.permission === 'default' || Notification.permission === 'prompt') {
+    if (Notification.permission === 'default') {
       await Notification.requestPermission()
     }
     
