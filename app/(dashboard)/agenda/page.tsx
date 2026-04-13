@@ -19,6 +19,7 @@ import {
   Calendar
 } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
+import { OfflineSync } from '@/lib/offline-sync'
 import { format12h, getIniciales } from '@/lib/utils'
 
 export default function AgendaPage() {
@@ -58,15 +59,27 @@ export default function AgendaPage() {
   })
 
   async function loadCitas() {
+    const cacheKey = `agenda-${format(startOfCurrentWeek, 'yyyy-MM-dd')}`;
+    
+    // 1. Cargar desde caché (Offline First)
+    const cachedData = OfflineSync.getFromCache(cacheKey);
+    if (cachedData) {
+      setCitas(cachedData);
+      setLoading(false);
+    }
+
     try {
-      setLoading(true)
       const { data } = await supabase
         .from('citas')
         .select('*, pacientes(nombre)')
         .gte('fecha', format(startOfCurrentWeek, 'yyyy-MM-dd'))
         .lte('fecha', format(addDays(startOfCurrentWeek, 5), 'yyyy-MM-dd'))
         .order('hora_inicio')
-      setCitas(data || [])
+      
+      if (data) {
+        setCitas(data);
+        OfflineSync.saveToCache(cacheKey, data);
+      }
     } catch (err) {
       console.error(err)
     } finally {

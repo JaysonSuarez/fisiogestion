@@ -4,7 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Share, PlusSquare } from 'lucide-react';
 import { subscribeUser } from '@/lib/push-subscription';
 
-export default function PushManager() {
+interface PushManagerProps {
+  mode?: 'floating' | 'inline';
+}
+
+export default function PushManager({ mode = 'floating' }: PushManagerProps) {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
@@ -12,20 +16,16 @@ export default function PushManager() {
   const [showIOSBanner, setShowIOSBanner] = useState(false);
 
   useEffect(() => {
-    // Detectar modo standalone
     const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
     setIsStandalone(!!standalone);
 
-    // Detectar iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    // Verificar permiso inicial
     if ('Notification' in window) {
       setPermission(Notification.permission);
     }
 
-    // Verificar si ya tiene una suscripción activa en el navegador
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(reg => {
         reg.pushManager.getSubscription().then(sub => {
@@ -34,7 +34,6 @@ export default function PushManager() {
       });
     }
 
-    // Lógica para mostrar el banner de iOS
     if (ios && !standalone) {
       setShowIOSBanner(true);
     }
@@ -48,7 +47,6 @@ export default function PushManager() {
     }
   };
 
-  // Si es iOS y no está instalado, mostrar instrucciones
   if (showIOSBanner) {
     return (
       <div className="fixed bottom-4 left-4 right-4 bg-white p-4 rounded-xl shadow-2xl border border-pink-100 z-50 animate-bounce-subtle">
@@ -75,8 +73,36 @@ export default function PushManager() {
     );
   }
 
-  // Si no está instalado (en otros dispositivos), tal vez no mostramos el botón o sí. 
-  // Pero el paso 7 dice: "Solo muestra el botón de 'Activar Notificaciones' una vez que la app haya sido instalada."
+  // En iOS, el botón solo se muestra si está instalado (standalone)
+  if (isIOS && !isStandalone) return null;
+
+  if (mode === 'inline') {
+    return (
+      <div className="flex items-center">
+        <button
+          onClick={handleSubscribe}
+          disabled={permission === 'granted' && isSubscribed}
+          className={`shrink-0 p-3 rounded-2xl shadow-xl border transition-all active:scale-95 group relative ${
+            isSubscribed && permission === 'granted'
+              ? 'bg-rose-50 text-rose-300 border-rose-50 cursor-default'
+              : 'bg-white text-rose-500 border-rose-100 hover:scale-110 animate-bounce'
+          }`}
+          title="Activar Notificaciones"
+        >
+          {isSubscribed && permission === 'granted' ? (
+            <Bell className="w-6 h-6" />
+          ) : (
+            <>
+              <Bell className="w-6 h-6" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-600 rounded-full border-2 border-white animate-ping"></span>
+            </>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  // Modo flotante original (backup)
   if (!isStandalone) return null;
 
   return (
@@ -96,12 +122,6 @@ export default function PushManager() {
           <BellOff className="w-6 h-6 animate-pulse" />
         )}
       </button>
-      
-      {!isSubscribed && (
-        <div className="absolute -top-12 right-0 bg-white px-3 py-1 rounded-lg shadow-md border border-pink-50 whitespace-nowrap text-xs text-pink-600 font-medium">
-          Activar notificaciones
-        </div>
-      )}
     </div>
   );
 }

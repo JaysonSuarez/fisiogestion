@@ -25,10 +25,11 @@ import {
   BellRing
 } from 'lucide-react'
 import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
+import PushManager from '@/components/push/PushManager'
+import { OfflineSync } from '@/lib/offline-sync'
 import { formatCOP, format12h, getIniciales } from '@/lib/utils'
 
 export default function DashboardPage() {
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default')
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>({
     pacientesActivos: 0,
@@ -48,53 +49,66 @@ export default function DashboardPage() {
     const now = new Date()
     const todayStr = format(now, 'yyyy-MM-dd')
 
-    const { count: pacientesActivos } = await supabase
-      .from('pacientes')
-      .select('*', { count: 'exact', head: true })
-      .eq('estado', 'activo')
+    // 1. Cargar desde caché (Offline First)
+    const cachedData = OfflineSync.getFromCache('dashboard');
+    if (cachedData) {
+      setData(cachedData);
+      setLoading(false);
+    }
 
-    const { data: citasHoyRaw } = await supabase
-      .from('citas')
-      .select('*, pacientes(nombre, telefono)')
-      .eq('fecha', todayStr)
-      .neq('estado', 'cancelada')
+    try {
+      const { count: pacientesActivos } = await supabase
+        .from('pacientes')
+        .select('*', { count: 'exact', head: true })
+        .eq('estado', 'activo')
 
-    const { data: todasSesiones } = await supabase
-      .from('sesiones')
-      .select('valor, monto_pagado, diezmo_entregado, pacientes(nombre, id)')
+      const { data: citasHoyRaw } = await supabase
+        .from('citas')
+        .select('*, pacientes(nombre, telefono)')
+        .eq('fecha', todayStr)
+        .neq('estado', 'cancelada')
 
-    const porCobrar = todasSesiones?.reduce((acc, s) => acc + (s.valor - (s.monto_pagado || 0)), 0) || 0
-    const ingresoGlobal = todasSesiones?.reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
-    
-    // Solo ingresos para el diezmo actual (los que NO se han entregado aún)
-    const ingresoDiezmoActual = todasSesiones?.filter(s => !s.diezmo_entregado).reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
+      const { data: todasSesiones } = await supabase
+        .from('sesiones')
+        .select('valor, monto_pagado, diezmo_entregado, pacientes(nombre, id)')
 
-    const deudoresMap: Record<string, { nombre: string, deuda: number }> = {}
-    todasSesiones?.forEach(s => {
-      const p = s.pacientes as any
-      if (!p) return
-      const saldo = s.valor - (s.monto_pagado || 0)
-      if (saldo <= 0) return
-      if (!deudoresMap[p.id]) deudoresMap[p.id] = { nombre: p.nombre, deuda: 0 }
-      deudoresMap[p.id].deuda += saldo
-    })
-    const deudores = Object.values(deudoresMap).sort((a, b) => b.deuda - a.deuda).slice(0, 3)
+      const porCobrar = todasSesiones?.reduce((acc, s) => acc + (s.valor - (s.monto_pagado || 0)), 0) || 0
+      const ingresoGlobal = todasSesiones?.reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
+      const ingresoDiezmoActual = todasSesiones?.filter(s => !s.diezmo_entregado).reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
 
-    const { count: solicitudesCount } = await supabase
-      .from('solicitudes')
-      .select('*', { count: 'exact', head: true })
-      .eq('estado', 'pendiente')
+      const deudoresMap: Record<string, { nombre: string, deuda: number }> = {}
+      todasSesiones?.forEach(s => {
+        const p = s.pacientes as any
+        if (!p) return
+        const saldo = s.valor - (s.monto_pagado || 0)
+        if (saldo <= 0) return
+        if (!deudoresMap[p.id]) deudoresMap[p.id] = { nombre: p.nombre, deuda: 0 }
+        deudoresMap[p.id].deuda += saldo
+      })
+      const deudores = Object.values(deudoresMap).sort((a, b) => b.deuda - a.deuda).slice(0, 3)
 
-    setData({
-      pacientesActivos: pacientesActivos || 0,
-      citasHoy: citasHoyRaw || [],
-      porCobrar,
-      ingresoTotal: ingresoGlobal,
-      diezmoTotal: Math.round(ingresoDiezmoActual * 0.1),
-      deudores,
-      solicitudesCount: solicitudesCount || 0
-    })
-    setLoading(false)
+      const { count: solicitudesCount } = await supabase
+        .from('solicitudes')
+        .select('*', { count: 'exact', head: true })
+        .eq('estado', 'pendiente')
+
+      const newData = {
+        pacientesActivos: pacientesActivos || 0,
+        citasHoy: citasHoyRaw || [],
+        porCobrar,
+        ingresoTotal: ingresoGlobal,
+        diezmoTotal: Math.round(ingresoDiezmoActual * 0.1),
+        deudores,
+        solicitudesCount: solicitudesCount || 0
+      };
+
+      setData(newData);
+      OfflineSync.saveToCache('dashboard', newData);
+    } catch (e) {
+      console.error('Error loading dashboard network data', e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -112,63 +126,6 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Utility para convertir keys
-  const arrayBufferToBase64 = (buffer: ArrayBuffer | null) => {
-    if (!buffer) return '';
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
-  };
-
-  // Solicitar permisos de notificación
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) return
-    if (Notification.permission === 'default') {
-      await Notification.requestPermission()
-    }
-    
-    if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        let subscription = await registration.pushManager.getSubscription();
-        
-        if (!subscription) {
-          subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: 'BBEfDbcsZF09QtyMFwn7L1PIMaYDJvgEGuOLqC85Sxv7YPTOAaNptGJkh1Pa70Q0hKKIVWuHxlT2DQcUQrKnfGg'
-          });
-        }
-
-        if (subscription) {
-          const subJSON = subscription.toJSON();
-          await supabase
-            .from('push_subscriptions')
-            .upsert({
-              endpoint: subscription.endpoint,
-              p256dh: subJSON.keys?.p256dh,
-              auth: subJSON.keys?.auth
-            }, { onConflict: 'endpoint' });
-        }
-      } catch (err) {
-        console.error('Error suscribiendo a push:', err);
-      }
-    }
-  }
-
-  // Pedir permiso al inicio y actualizar estado
-  useEffect(() => {
-    if (!('Notification' in window)) {
-      setNotificationPermission('unsupported')
-    } else {
-      setNotificationPermission(Notification.permission)
-      if (Notification.permission === 'granted') {
-        requestNotificationPermission()
-      }
-    }
-  }, [])
 
   // Manejar interacciones de notificaciones PUSH
   useEffect(() => {
@@ -290,26 +247,7 @@ export default function DashboardPage() {
                 Hola, Ft. Liliana
               </h2>
               
-              {notificationPermission !== 'granted' && (
-                <button 
-                  onClick={async () => {
-                    if (!('Notification' in window)) {
-                      alert('Tu navegador no soporta notificaciones. Si usas iPhone, añade la app a la pantalla de Inicio.');
-                      return;
-                    }
-                    const permission = await Notification.requestPermission()
-                    setNotificationPermission(permission)
-                    if (permission === 'granted') {
-                      requestNotificationPermission()
-                    }
-                  }}
-                  className="shrink-0 p-3 bg-white text-rose-500 rounded-2xl shadow-xl border border-rose-100 hover:scale-110 active:scale-95 transition-all group relative animate-bounce"
-                  title="Activar Notificaciones"
-                >
-                  <Bell size={24} />
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-600 rounded-full border-2 border-white animate-ping"></span>
-                </button>
-              )}
+                <PushManager mode="inline" />
             </div>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-rose-400 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] italic">

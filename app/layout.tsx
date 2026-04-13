@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import Sidebar from '@/components/layout/Sidebar'
-import PushManager from '@/components/push/PushManager'
 
 export const metadata: Metadata = {
   title: 'FisioGestión',
@@ -39,11 +38,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <div className="flex min-h-screen bg-gray-50/50">
           <Sidebar />
-          <main className="flex-1 overflow-auto">
+          <main className="main-content">
             {children}
           </main>
         </div>
-        <PushManager />
         
         <script
           dangerouslySetInnerHTML={{
