@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { ClipboardPlus, Activity, CheckCircle, Clock, AlertCircle, Loader2, Sparkles, Edit3, Plus, Minus, X, Save, Trash2 } from 'lucide-react'
+import { ClipboardPlus, Activity, CheckCircle, Clock, AlertCircle, Loader2, Sparkles, Edit3, Plus, Minus, X, Save, Trash2, Flower2 } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
@@ -77,7 +77,6 @@ export default function SesionesPage() {
   const openEditModal = (plan: any) => {
     setSelectedPlan(plan)
     setLocalValor(plan.valor)
-    // Sort citas by date for the list
     const sortedCitas = [...(plan.citas || [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
     setLocalCitas(sortedCitas)
     setIsEditModalOpen(true)
@@ -97,7 +96,6 @@ export default function SesionesPage() {
     }
     
     setLocalCitas([...localCitas, newCita])
-    // Auto-update price if it's based on a calculated per-session price
     if (localCitas.length > 0) {
       const perSession = localValor / localCitas.length
       setLocalValor(Math.round(localValor + perSession))
@@ -108,7 +106,6 @@ export default function SesionesPage() {
 
   const handleRemoveLocalSession = (id: string) => {
     if (localCitas.length <= 1) return
-    
     const perSession = localValor / localCitas.length
     setLocalCitas(localCitas.filter(c => c.id !== id))
     setLocalValor(Math.max(0, Math.round(localValor - perSession)))
@@ -125,7 +122,6 @@ export default function SesionesPage() {
   const savePlanChanges = async () => {
     setSaving(true)
     try {
-      // 1. Update the session (plan) value
       const { error: sessionError } = await supabase
         .from('sesiones')
         .update({ valor: localValor })
@@ -133,28 +129,20 @@ export default function SesionesPage() {
 
       if (sessionError) throw sessionError
 
-      // 2. Handle Citas: 
-      // - Those in localCitas that are NOT new: Update date
-      // - Those in localCitas that ARE new: Insert
-      // - Those in original selectedPlan.citas that are NOT in localCitas: Delete
-
       const originalIds = selectedPlan.citas.map((c: any) => c.id)
       const currentIds = localCitas.filter(c => !c.isNew).map(c => c.id)
       const toDelete = originalIds.filter((id: string) => !currentIds.includes(id))
 
-      // Delete removed sessions
       if (toDelete.length > 0) {
         const { error: delError } = await supabase.from('citas').delete().in('id', toDelete)
         if (delError) throw delError
       }
 
-      // Update existing ones (only date and status)
       const toUpdate = localCitas.filter(c => !c.isNew)
       for (const c of toUpdate) {
         await supabase.from('citas').update({ fecha: c.fecha, estado: c.estado }).eq('id', c.id)
       }
 
-      // Insert new ones
       const toInsert = localCitas.filter(c => c.isNew).map(c => ({
         sesion_id: selectedPlan.id,
         paciente_id: selectedPlan.paciente_id,
@@ -195,7 +183,7 @@ export default function SesionesPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 pb-20">
+    <div className="max-w-7xl mx-auto px-4 pb-20 relative overflow-hidden">
       <NotificationModal 
         isOpen={notification.isOpen}
         onClose={() => setNotification(prev => ({...prev, isOpen: false}))}
@@ -204,60 +192,53 @@ export default function SesionesPage() {
         message={notification.message}
       />
 
-      <header className="topbar mb-10">
+      {/* Decorative Elements */}
+      <div className="absolute -top-20 -right-20 text-rose-100/30 -z-10 rotate-12">
+        <Activity size={300} strokeWidth={0.5} />
+      </div>
+
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
         <div>
           <h2 className="font-display italic text-5xl mb-2 text-rose-950 flex items-center gap-3">
-            <ClipboardPlus className="text-rose-400" size={32} />
+            <ClipboardPlus className="text-rose-400" size={36} />
             Planes
           </h2>
-          <p className="text-rose-400 font-bold text-xs uppercase tracking-widest leading-none">Historial de tratamientos y sesiones</p>
+          <p className="text-rose-400 font-bold text-xs uppercase tracking-widest italic">Tratamientos y Gestión de Sesiones</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <button 
             onClick={() => setShowHistory(!showHistory)}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${showHistory ? 'bg-rose-950 text-white shadow-xl shadow-rose-950/20' : 'bg-rose-50 text-rose-400 hover:bg-rose-100'}`}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${showHistory ? 'bg-rose-950 text-white shadow-xl shadow-rose-950/20' : 'bg-white text-rose-400 border border-rose-100 hover:bg-rose-50 shadow-sm'}`}
           >
             <Clock size={16} />
             {showHistory ? 'Ver Activos' : 'Ver Historial'}
           </button>
-          <Link href="/sesiones/nueva" className="btn-primary !bg-rose-600 hover:!bg-rose-700 !shadow-rose-100 flex items-center gap-2 !rounded-2xl !py-3">
+          <Link href="/sesiones/nueva" className="flex-1 sm:flex-none p-4 bg-rose-600 text-white rounded-2xl shadow-xl shadow-rose-200 hover:bg-rose-700 active:scale-95 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
             <Sparkles size={18} />
-            <span className="hidden sm:inline text-xs font-black uppercase">Crear Nuevo Plan</span>
+            <span>Nuevo Plan</span>
           </Link>
         </div>
       </header>
 
-      <section className="metric-grid gap-6 mb-12">
-        <div className="card metric-card border-none shadow-lg shadow-rose-100/20">
-          <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl w-fit mb-4">
-             <Activity size={20} />
-          </div>
+      <section className="metric-grid gap-4 sm:gap-6 mb-12">
+        <div className="card metric-card border-none shadow-lg shadow-rose-100/20 bg-white/80 backdrop-blur-sm">
           <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Total Planes</span>
-          <div className="text-2xl font-black text-rose-950">{sesiones.length}</div>
+          <div className="text-xl font-black text-rose-950">{sesiones.length}</div>
         </div>
         
-        <div className="card metric-card border-none shadow-lg shadow-rose-100/20">
-          <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl w-fit mb-4">
-             <Clock size={20} />
-          </div>
+        <div className="card metric-card border-none shadow-lg shadow-rose-100/20 bg-white/80 backdrop-blur-sm">
           <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Horas Clínicas</span>
-          <div className="text-2xl font-black text-rose-950">{totalHoras.toFixed(1)} h</div>
+          <div className="text-xl font-black text-rose-950">{totalHoras.toFixed(1)} h</div>
         </div>
 
-        <div className="card metric-card border-none bg-white shadow-xl shadow-rose-100/30 relative overflow-hidden group border border-rose-50">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl w-fit mb-4">
-             <CheckCircle size={20} />
-          </div>
-          <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Completadas</span>
-          <div className="text-2xl font-black text-rose-950">{completadasCount}</div>
+        <div className="card metric-card border-none bg-emerald-50 text-emerald-600 shadow-xl shadow-rose-100/10">
+          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block mb-1">Completadas</span>
+          <div className="text-xl font-black">{completadasCount}</div>
         </div>
 
-        <div className="card metric-card border-none bg-rose-50 text-rose-600 shadow-lg shadow-rose-100/20">
-          <div className="p-3 bg-white text-rose-500 rounded-2xl w-fit mb-4 shadow-sm">
-             <AlertCircle size={20} />
-          </div>
-          <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Pendientes</span>
-          <div className="text-2xl font-black">{pendientesCount}</div>
+        <div className="card metric-card border-none bg-rose-50 text-rose-600 shadow-lg shadow-rose-100/10">
+          <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-1">Pendientes</span>
+          <div className="text-xl font-black">{pendientesCount}</div>
         </div>
       </section>
 
@@ -343,7 +324,6 @@ export default function SesionesPage() {
               </div>
               
               <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-                 {/* Price Section */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                     <div className="bg-rose-50/50 p-6 rounded-[32px] border-4 border-white shadow-inner">
                       <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-3 block">Precio Total del Plan</label>
@@ -363,7 +343,6 @@ export default function SesionesPage() {
                     </div>
                  </div>
 
-                 {/* Sessions List Section */}
                  <div className="space-y-4">
                     <div className="flex items-center justify-between px-2">
                        <h4 className="text-[10px] font-black text-rose-950 uppercase tracking-[0.2em]">Sesiones del Plan ({localCitas.length})</h4>

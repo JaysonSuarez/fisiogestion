@@ -213,7 +213,7 @@ function FinanzasContent() {
         message="¿Estás seguro de que deseas eliminar este registro? Esto cancelará la deuda asociada a esta sesión."
       />
 
-      <header className="topbar mb-10">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
         <div>
           <h2 className="font-display italic text-5xl mb-2 flex items-center gap-3 text-rose-950">
             <Wallet className="text-rose-400" size={36} />
@@ -221,27 +221,27 @@ function FinanzasContent() {
           </h2>
           <p className="text-rose-400 font-bold text-xs uppercase tracking-widest italic">Gestión de cartera y abonos</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="btn-primary !bg-rose-950 hover:!bg-rose-900 !rounded-2xl !py-3 flex items-center gap-2 shadow-xl shadow-rose-950/20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest">
+        <button onClick={() => setIsModalOpen(true)} className="shrink-0 w-full sm:w-auto p-4 bg-rose-950 text-white rounded-2xl shadow-xl shadow-rose-950/20 hover:bg-rose-900 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
           <Sparkles size={18} />
           Registrar Abono
         </button>
       </header>
 
-      <section className="metric-grid gap-6">
+      <section className="metric-grid gap-4 sm:gap-6">
         <div className="card metric-card border-none shadow-lg shadow-rose-100/20">
           <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Total Proyectado</span>
-          <div className="text-2xl font-black text-rose-950">{formatCOP(totalProyectado)}</div>
+          <div className="text-lg sm:text-xl font-black text-rose-950">{formatCOP(totalProyectado)}</div>
         </div>
 
         <div className="card metric-card bg-rose-600 border-none shadow-xl shadow-rose-200 group text-white">
           <span className="text-[10px] font-black text-rose-100 uppercase tracking-widest block mb-1">Total Recaudado</span>
-          <div className="text-2xl font-black">{formatCOP(totalCobrado)}</div>
+          <div className="text-xl font-black">{formatCOP(totalCobrado)}</div>
           <TrendingUp className="absolute right-4 bottom-4 text-white/10 group-hover:scale-125 transition-transform" size={48} />
         </div>
 
         <div className="card metric-card bg-rose-50 border-none shadow-lg shadow-rose-100/20 group">
           <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-1">Por Cobrar</span>
-          <div className="text-2xl font-black text-rose-600 font-display">{formatCOP(porCobrar)}</div>
+          <div className="text-xl font-black text-rose-600">{formatCOP(porCobrar)}</div>
           <AlertCircle className="absolute right-4 bottom-4 text-rose-500/10 group-hover:scale-125 transition-transform" size={48} />
         </div>
       </section>
@@ -268,10 +268,10 @@ function FinanzasContent() {
                 </div>
               </div>
               
-              <div className="flex justify-between items-end mt-4 pt-4 border-t border-rose-50">
+              <div className="flex justify-between items-end mt-4 pt-4 border-t border-rose-50/50">
                 <div>
                    <div className="text-rose-300 text-[9px] uppercase font-black tracking-widest mb-1">Deuda pendiente</div>
-                   <div className="text-3xl font-black text-rose-950 tracking-tighter">{formatCOP(p.deudaTotal)}</div>
+                   <div className="text-2xl font-black text-rose-950 tracking-tighter">{formatCOP(p.deudaTotal)}</div>
                 </div>
                 <div className="flex gap-2">
                    <button 
@@ -279,20 +279,20 @@ function FinanzasContent() {
                       setSelectedPatient(p)
                       setIsDetailModalOpen(true)
                     }}
-                    className="w-12 h-12 bg-rose-50 text-rose-400 rounded-2xl hover:bg-rose-100 hover:text-rose-600 transition-all active:scale-90 flex items-center justify-center border border-rose-100"
+                    className="w-10 h-10 bg-rose-50 text-rose-400 rounded-xl hover:bg-rose-100 hover:text-rose-600 transition-all active:scale-90 flex items-center justify-center border border-rose-100"
                     title="Ver/Eliminar Sesiones"
                   >
-                    <Trash2 size={20} />
+                    <Trash2 size={16} />
                   </button>
                   <button 
                     onClick={() => {
                       setIdSeleccionado(p.id)
                       setIsModalOpen(true)
                     }}
-                    className="w-12 h-12 bg-rose-950 text-rose-100 rounded-2xl hover:bg-rose-600 hover:text-white transition-all shadow-lg active:scale-90 flex items-center justify-center"
+                    className="w-10 h-10 bg-rose-950 text-rose-100 rounded-xl hover:bg-rose-600 hover:text-white transition-all shadow-lg active:scale-90 flex items-center justify-center"
                     title="Cobrar Ahora"
                   >
-                    <DollarSign size={24} />
+                    <DollarSign size={20} />
                   </button>
                 </div>
               </div>
