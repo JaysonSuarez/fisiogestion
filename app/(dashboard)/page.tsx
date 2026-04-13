@@ -280,30 +280,39 @@ export default function DashboardPage() {
         <Sprout size={250} strokeWidth={0.5} />
       </div>
 
-      <header className="topbar mb-10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between w-full gap-4">
-          <div>
-            <div className="flex items-center gap-4">
-              <h2 className="font-display italic text-6xl mb-2 text-rose-950 flex items-center gap-4">
-                <Sparkles className="text-rose-400 animate-pulse" size={40} />
+      <header className="topbar mb-10 relative">
+        <div className="flex flex-row items-center justify-between w-full gap-4">
+          <div className="flex-1">
+            <div className="flex items-center justify-between md:justify-start gap-4">
+              <h2 className="font-display italic text-4xl md:text-6xl text-rose-950 flex items-center gap-3">
+                <Sparkles className="text-rose-400 animate-pulse hidden md:block" size={40} />
+                <Sparkles className="text-rose-400 animate-pulse md:hidden" size={28} />
                 Hola, Ft. Liliana
               </h2>
-              {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+              
+              {notificationPermission !== 'granted' && (
                 <button 
                   onClick={async () => {
-                    await requestNotificationPermission()
-                    setNotificationPermission(Notification.permission)
+                    if (!('Notification' in window)) {
+                      alert('Tu navegador no soporta notificaciones. Si usas iPhone, añade la app a la pantalla de Inicio.');
+                      return;
+                    }
+                    const permission = await Notification.requestPermission()
+                    setNotificationPermission(permission)
+                    if (permission === 'granted') {
+                      requestNotificationPermission()
+                    }
                   }}
-                  className="p-3 bg-white text-rose-500 rounded-2xl shadow-lg border border-rose-100 hover:scale-110 active:scale-95 transition-all group relative mt-[-10px]"
+                  className="shrink-0 p-3 bg-white text-rose-500 rounded-2xl shadow-xl border border-rose-100 hover:scale-110 active:scale-95 transition-all group relative animate-bounce"
                   title="Activar Notificaciones"
                 >
-                  <Bell className="animate-bounce" size={24} />
-                  <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-rose-600 rounded-full border-2 border-white animate-ping"></span>
+                  <Bell size={24} />
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-600 rounded-full border-2 border-white animate-ping"></span>
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-rose-400 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] italic">
                 {format(now, "EEEE d 'de' MMMM", { locale: es })}
               </p>
               <Flower size={14} className="text-rose-200" />
@@ -323,7 +332,7 @@ export default function DashboardPage() {
           <div className="relative z-10">
             <div className="p-3 bg-rose-50 text-rose-400 rounded-2xl w-fit mb-6 shadow-inner"><Users size={24} /></div>
             <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Pacientes</span>
-            <div className="text-4xl font-black text-rose-950 tracking-tighter">{data.pacientesActivos}</div>
+            <div className="text-3xl md:text-4xl font-black text-rose-950 tracking-tighter">{data.pacientesActivos}</div>
           </div>
         </div>
 
@@ -334,7 +343,7 @@ export default function DashboardPage() {
           <div className="relative z-10">
             <div className="p-3 bg-rose-50 text-rose-400 rounded-2xl w-fit mb-6 shadow-inner"><Calendar size={24} /></div>
             <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Citas Hoy</span>
-            <div className="text-4xl font-black text-rose-950 tracking-tighter">{data.citasHoy.length}</div>
+            <div className="text-3xl md:text-4xl font-black text-rose-950 tracking-tighter">{data.citasHoy.length}</div>
           </div>
         </div>
 
@@ -345,7 +354,9 @@ export default function DashboardPage() {
           <div className="relative z-10">
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl w-fit mb-6 shadow-sm"><TrendingUp size={24} /></div>
             <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Total recaudado</span>
-            <div className="text-4xl font-black text-rose-950 tracking-tighter">{formatCOP(data.ingresoTotal)}</div>
+            <div className="text-2xl md:text-4xl font-black text-rose-950 tracking-tighter truncate" title={formatCOP(data.ingresoTotal)}>
+              {formatCOP(data.ingresoTotal)}
+            </div>
           </div>
         </div>
 
@@ -356,7 +367,7 @@ export default function DashboardPage() {
           <div className="relative z-10">
             <div className="p-3 bg-white text-rose-500 rounded-2xl w-fit mb-6 shadow-sm"><Activity size={24} /></div>
             <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Solicitudes</span>
-            <div className="text-4xl font-black text-rose-950 tracking-tighter">{data.solicitudesCount}</div>
+            <div className="text-3xl md:text-4xl font-black text-rose-950 tracking-tighter">{data.solicitudesCount}</div>
           </div>
         </div>
       </section>
@@ -379,34 +390,37 @@ export default function DashboardPage() {
               if (!p) return null
               const initials = getIniciales(p.nombre)
               return (
-                <div key={cita.id} className="flex items-center justify-between p-5 hover:bg-white rounded-[32px] transition-all border border-transparent hover:border-rose-100 hover:shadow-lg shadow-rose-100/20 group">
-                  <div className="flex items-center gap-5">
-                    <div className="w-14 h-14 rounded-[22px] bg-rose-950 text-rose-100 flex items-center justify-center font-black text-sm group-hover:bg-rose-600 transition-colors shadow-lg shadow-rose-950/20 uppercase">{initials}</div>
-                    <div>
-                      <div className="font-black text-rose-950 group-hover:text-rose-600 transition-colors uppercase tracking-tight text-lg">{p.nombre}</div>
-                      <div className="text-[10px] text-rose-300 font-bold uppercase tracking-widest flex items-center gap-2">
+                <div key={cita.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 hover:bg-white rounded-[28px] sm:rounded-[32px] transition-all border border-transparent hover:border-rose-100 hover:shadow-lg shadow-rose-100/20 group gap-4">
+                  <div className="flex items-center gap-4 sm:gap-5">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[20px] sm:rounded-[22px] bg-rose-950 text-rose-100 flex items-center justify-center font-black text-xs sm:text-sm group-hover:bg-rose-600 transition-colors shadow-lg shadow-rose-950/20 uppercase shrink-0">{initials}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-black text-rose-950 group-hover:text-rose-600 transition-colors uppercase tracking-tight text-base sm:text-lg truncate">{p.nombre}</div>
+                      <div className="text-[9px] sm:text-[10px] text-rose-300 font-bold uppercase tracking-widest flex items-center gap-2">
                         <Clock size={12} /> {format12h(cita.hora_inicio)} · {cita.duracion_minutos} MIN
                       </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    {p.telefono && (
-                      <a 
-                        href={`https://wa.me/57${p.telefono.replace(/\s/g, '')}?text=${encodeURIComponent(
-                          `Hola *${p.nombre}* 👋, te recordamos tu sesión de hoy con la Fisio Liliana González a las *${format12h(cita.hora_inicio)}*. ¡Te esperamos! ✨`
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-                        title="Enviar recordatorio WhatsApp"
-                      >
-                        <MessageCircle size={16} />
-                      </a>
-                    )}
-                    <span className="badge bg-rose-50 text-rose-500 text-[9px] font-black px-4 py-1.5 rounded-2xl uppercase italic border border-rose-100/50">
-                      {cita.estado}
-                    </span>
+                  <div className="flex items-center justify-between sm:justify-end gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-rose-50">
+                    <span className="sm:hidden text-[8px] font-black text-rose-300 uppercase tracking-widest italic">Estado:</span>
+                    <div className="flex items-center gap-2">
+                      {p.telefono && (
+                        <a 
+                          href={`https://wa.me/57${p.telefono.replace(/\s/g, '')}?text=${encodeURIComponent(
+                            `Hola *${p.nombre}* 👋, te recordamos tu sesión de hoy con la Fisio Liliana González a las *${format12h(cita.hora_inicio)}*. ¡Te esperamos! ✨`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                          title="Enviar recordatorio WhatsApp"
+                        >
+                          <MessageCircle size={16} />
+                        </a>
+                      )}
+                      <span className="badge bg-rose-50 text-rose-500 text-[9px] font-black px-4 py-1.5 rounded-2xl uppercase italic border border-rose-100/50">
+                        {cita.estado}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )
@@ -467,15 +481,15 @@ export default function DashboardPage() {
             </div>
             
             <div className="space-y-8 relative z-10">
-              <div className="flex justify-between items-end">
-                <div>
-                  <div className="text-rose-500 text-[9px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
-                    Ofrenda (10%) <Sparkles size={10} />
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <div className="text-rose-500 text-[9px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
+                        Ofrenda (10%) <Sparkles size={10} />
+                      </div>
+                      <div className="text-3xl md:text-5xl font-black text-rose-950 tracking-tighter mb-1">{formatCOP(data.diezmoTotal)}</div>
+                      <div className="text-[8px] text-rose-400 font-bold uppercase tracking-widest italic">Sincronizado con tus bendiciones</div>
+                    </div>
                   </div>
-                  <div className="text-5xl font-black text-rose-950 tracking-tighter mb-1">{formatCOP(data.diezmoTotal)}</div>
-                  <div className="text-[8px] text-rose-400 font-bold uppercase tracking-widest italic">Sincronizado con tus bendiciones</div>
-                </div>
-              </div>
 
               <div className="pt-6 border-t border-rose-200/50 space-y-4">
                 <div className="flex justify-between text-[10px] font-black text-rose-500 mb-1 uppercase tracking-[0.2em]">
