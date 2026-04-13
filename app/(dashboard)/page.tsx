@@ -109,11 +109,49 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // Utility para convertir keys
+  const arrayBufferToBase64 = (buffer: ArrayBuffer | null) => {
+    if (!buffer) return '';
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+  };
+
   // Solicitar permisos de notificación
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) return
-    if (Notification.permission === 'default') {
+    if (Notification.permission === 'default' || Notification.permission === 'prompt') {
       await Notification.requestPermission()
+    }
+    
+    if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: 'BBEfDbcsZF09QtyMFwn7L1PIMaYDJvgEGuOLqC85Sxv7YPTOAaNptGJkh1Pa70Q0hKKIVWuHxlT2DQcUQrKnfGg'
+          });
+        }
+
+        if (subscription) {
+          const subJSON = subscription.toJSON();
+          await supabase
+            .from('push_subscriptions')
+            .upsert({
+              endpoint: subscription.endpoint,
+              p256dh: subJSON.keys?.p256dh,
+              auth: subJSON.keys?.auth
+            }, { onConflict: 'endpoint' });
+        }
+      } catch (err) {
+        console.error('Error suscribiendo a push:', err);
+      }
     }
   }
 
@@ -121,6 +159,39 @@ export default function DashboardPage() {
   useEffect(() => {
     requestNotificationPermission()
   }, [])
+
+  // Manejar interacciones de notificaciones PUSH
+  useEffect(() => {
+    // 1. Cuando la app se abre desde la notificación cerrada (vía query param)
+    const params = new URLSearchParams(window.location.search)
+    const citaId = params.get('cita_id')
+    const phase = params.get('phase')
+    
+    if (params.get('trigger_wa') === 'true' && citaId && data.citasHoy.length > 0) {
+      const cita = data.citasHoy.find((c: any) => c.id === citaId)
+      if (cita) {
+        setActiveReminder({ ...cita, phase: phase || '1h' })
+        // Limpiamos la URL para no volver a dispararlo al recargar
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+    }
+
+    // 2. Cuando la app ya estaba abierta (Background o Foreground)
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'OPEN_WHATSAPP') {
+        const { citaId, phase } = event.data.data || {}
+        if (citaId && data.citasHoy.length > 0) {
+          const cita = data.citasHoy.find((c: any) => c.id === citaId)
+          if (cita) {
+            setActiveReminder({ ...cita, phase: phase || '1h' })
+          }
+        }
+      }
+    }
+    
+    navigator.serviceWorker?.addEventListener('message', handleMessage)
+    return () => navigator.serviceWorker?.removeEventListener('message', handleMessage)
+  }, [data.citasHoy])
 
   // Monitor de recordatorios (revisa cada 30 segundos)
   useEffect(() => {
