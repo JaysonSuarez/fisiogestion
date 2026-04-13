@@ -20,7 +20,9 @@ import {
   Heart,
   Flower2,
   Flower,
-  Sprout
+  Sprout,
+  Bell,
+  BellRing
 } from 'lucide-react'
 import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 import { formatCOP, format12h, getIniciales } from '@/lib/utils'
@@ -279,51 +281,36 @@ export default function DashboardPage() {
       </div>
 
       <header className="topbar mb-10">
-        <div>
-          <h2 className="font-display italic text-6xl mb-2 text-rose-950 flex items-center gap-4">
-            <Sparkles className="text-rose-400 animate-pulse" size={40} />
-            Hola, Ft. Liliana
-          </h2>
-          <div className="flex items-center gap-2">
-            <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">
-              {format(now, "EEEE d 'de' MMMM", { locale: es })}
-            </p>
-            <Flower size={14} className="text-rose-200" />
+        <div className="flex flex-col md:flex-row md:items-center justify-between w-full gap-4">
+          <div>
+            <div className="flex items-center gap-4">
+              <h2 className="font-display italic text-6xl mb-2 text-rose-950 flex items-center gap-4">
+                <Sparkles className="text-rose-400 animate-pulse" size={40} />
+                Hola, Ft. Liliana
+              </h2>
+              {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+                <button 
+                  onClick={async () => {
+                    await requestNotificationPermission()
+                    setNotificationPermission(Notification.permission)
+                  }}
+                  className="p-3 bg-white text-rose-500 rounded-2xl shadow-lg border border-rose-100 hover:scale-110 active:scale-95 transition-all group relative mt-[-10px]"
+                  title="Activar Notificaciones"
+                >
+                  <Bell className="animate-bounce" size={24} />
+                  <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-rose-600 rounded-full border-2 border-white animate-ping"></span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">
+                {format(now, "EEEE d 'de' MMMM", { locale: es })}
+              </p>
+              <Flower size={14} className="text-rose-200" />
+            </div>
           </div>
         </div>
       </header>
-
-      {/* Notification Banner - Premium Design */}
-      {notificationPermission === 'default' && (
-        <div className="mb-10 p-8 bg-rose-600 rounded-[40px] text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-rose-200/50 animate-in slide-in-from-top-10 duration-1000 relative overflow-hidden group">
-           <div className="absolute -right-10 -top-10 text-white/10 group-hover:rotate-12 transition-transform duration-700">
-              <Sparkles size={160} />
-           </div>
-           <div className="flex items-center gap-6 relative z-10">
-              <div className="p-4 bg-white/20 backdrop-blur-md rounded-3xl shadow-inner animate-bounce">
-                 <MessageCircle size={32} />
-              </div>
-              <div>
-                 <h4 className="font-black uppercase tracking-[0.2em] text-sm mb-1">Activar Notificaciones</h4>
-                 <p className="text-[11px] opacity-90 font-bold uppercase tracking-tight max-w-sm leading-relaxed">
-                    Recibe alertas automáticas de tus pacientes y recordatorios de citas directamente en tu móvil. ✨
-                 </p>
-              </div>
-           </div>
-           <button 
-             onClick={async () => {
-               const permission = await Notification.requestPermission()
-               setNotificationPermission(permission)
-               if (permission === 'granted') {
-                 requestNotificationPermission()
-               }
-             }}
-             className="relative z-10 px-10 py-4 bg-white text-rose-600 rounded-[24px] font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_10px_30px_-5px_rgba(255,255,255,0.4)] whitespace-nowrap"
-           >
-             Permitir Ahora
-           </button>
-        </div>
-      )}
 
       <SolicitudesWidget />
 
