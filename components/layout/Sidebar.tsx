@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import {
   LayoutDashboard, Users, CalendarDays, Wallet,
   ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars, Settings, FileText
@@ -21,6 +21,27 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [isVisible, setIsVisible] = useState(true)
+  const lastScrollY = useRef(0)
+
+  // Scroll handler to hide/show mobile nav
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY
+      // Hide if scrolling down and not at the very top
+      if (currentScrollY > lastScrollY.current && currentScrollY > 80) {
+        setIsVisible(false)
+      } 
+      // Show if scrolling up
+      else if (currentScrollY < lastScrollY.current) {
+        setIsVisible(true)
+      }
+      lastScrollY.current = currentScrollY
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -90,11 +111,15 @@ export default function Sidebar() {
       </aside>
 
       {/* Mobile Bottom Nav - Liquid Glass Floating Pill with Camera-like Scroll */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-md lg:hidden">
-        <nav className="relative bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] overflow-hidden">
+      <div 
+        className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-md lg:hidden transition-all duration-500 ease-in-out ${
+          isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-24 opacity-0 scale-95'
+        }`}
+      >
+        <nav className="relative bg-white/30 backdrop-blur-[24px] border border-white/40 rounded-[35px] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.4)] overflow-hidden">
           <div 
             ref={scrollRef}
-            className="flex items-center overflow-x-auto scroll-smooth no-scrollbar snap-x snap-mandatory py-2 px-4 gap-2"
+            className="flex items-center overflow-x-auto scroll-smooth no-scrollbar snap-x snap-mandatory py-3 px-4 gap-1"
           >
             {navItems.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== '/' && pathname.startsWith(href))
@@ -102,13 +127,18 @@ export default function Sidebar() {
                 <Link 
                   key={href} 
                   href={href} 
-                  className={`relative flex items-center gap-2 px-6 py-3 rounded-full transition-all duration-500 snap-center shrink-0 ${
-                    active ? 'active-mobile-item bg-rose-950 text-white shadow-lg scale-105' : 'text-rose-900/60 hover:text-rose-900'
+                  className={`relative flex flex-col items-center justify-center min-w-[70px] py-1.5 transition-all duration-300 snap-center shrink-0 rounded-2xl ${
+                    active ? 'active-mobile-item text-rose-600 scale-110' : 'text-rose-950/40'
                   }`}
                 >
-                  <Icon strokeWidth={active ? 3 : 2} size={active ? 18 : 20} className={active ? 'animate-pulse' : ''} />
-                  <span className={`text-[10px] font-black uppercase tracking-[0.15em] whitespace-nowrap transition-all duration-300 ${
-                    active ? 'max-w-[200px] opacity-100 ml-1' : 'max-w-0 opacity-0 overflow-hidden'
+                  <div className={`relative p-2 rounded-xl transition-all duration-300 ${active ? 'bg-rose-50 shadow-inner' : ''}`}>
+                    <Icon strokeWidth={active ? 2.5 : 2} size={22} className={active ? 'scale-110' : 'scale-100'} />
+                    {active && (
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-rose-600 rounded-full"></span>
+                    )}
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase tracking-wider mt-1 transition-all duration-300 ${
+                    active ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
                   }`}>
                     {label}
                   </span>
