@@ -48,21 +48,18 @@ export async function subscribeUser() {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Sincronización: Upsert en push_subscriptions
-    // Si no hay usuario, guardamos igual con user_id null
+    // Sincronización: Usar toJSON() para asegurar compatibilidad con todos los navegadores
+    const subscriptionJSON = subscription.toJSON();
+
     const { error } = await supabase
       .from('push_subscriptions')
       .insert({
         user_id: user?.id || null,
-        subscription_data: JSON.parse(JSON.stringify(subscription)),
+        subscription_data: subscriptionJSON,
       });
 
     if (error) {
-      // Si ya existe por algún motivo (ej: duplicado de endpoint), lo ignoramos o manejamos
-      if (error.code === '23505') {
-        console.log('Subscription already exists in DB');
-        return true;
-      }
+      if (error.code === '23505') return true;
       console.error('Error syncing with Supabase:', error);
       return false;
     }
