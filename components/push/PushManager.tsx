@@ -23,7 +23,14 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
     setIsIOS(ios);
 
     if ('Notification' in window) {
-      setPermission(Notification.permission);
+      const currentPermission = Notification.permission;
+      setPermission(currentPermission);
+
+      if (currentPermission === 'granted') {
+        subscribeUser().then(ok => {
+          if (ok) setIsSubscribed(true);
+        });
+      }
     }
 
     if ('serviceWorker' in navigator) {
