@@ -83,13 +83,13 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
           onClick={handleSubscribe}
           disabled={permission === 'granted' && isSubscribed}
           className={`shrink-0 p-3 rounded-2xl shadow-xl border transition-all active:scale-95 group relative ${
-            isSubscribed && permission === 'granted'
+            permission === 'granted'
               ? 'bg-emerald-50 text-emerald-600 border-emerald-100 cursor-default'
               : 'bg-white text-rose-500 border-rose-100 hover:scale-110 animate-bounce'
           }`}
-          title={isSubscribed && permission === 'granted' ? "Notificaciones Activas" : "Activar Notificaciones"}
+          title={permission === 'granted' ? "Notificaciones Activas" : "Activar Notificaciones"}
         >
-          {isSubscribed && permission === 'granted' ? (
+          {permission === 'granted' ? (
             <Bell className="w-6 h-6" />
           ) : (
             <>

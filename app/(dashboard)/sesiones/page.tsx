@@ -183,7 +183,7 @@ export default function SesionesPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 pb-20 relative overflow-hidden">
+    <div className="max-w-7xl mx-auto px-4 pb-20">
       <NotificationModal 
         isOpen={notification.isOpen}
         onClose={() => setNotification(prev => ({...prev, isOpen: false}))}
@@ -191,11 +191,6 @@ export default function SesionesPage() {
         title={notification.title}
         message={notification.message}
       />
-
-      {/* Decorative Elements */}
-      <div className="absolute -top-20 -right-20 text-rose-100/30 -z-10 rotate-12">
-        <Activity size={300} strokeWidth={0.5} />
-      </div>
 
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
         <div>

@@ -76,12 +76,7 @@ export default function EvaluacionesIndexPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 relative overflow-hidden">
-      {/* Decorative Elements */}
-      <div className="absolute -top-20 -left-20 text-rose-100/30 -z-10 rotate-12">
-        <Flower2 size={300} strokeWidth={0.5} />
-      </div>
-
+    <div className="max-w-7xl mx-auto px-4 pb-20">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-rose-600 rounded-[22px] flex items-center justify-center shadow-xl shadow-rose-200">
