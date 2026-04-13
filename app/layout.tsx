@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import Sidebar from '@/components/layout/Sidebar'
+import PushManager from '@/components/push/PushManager'
 
 export const metadata: Metadata = {
   title: 'FisioGestión',
@@ -30,20 +31,31 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <head>
         <link rel="icon" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="FisioGestión" />
       </head>
-      <body>
-        {children}
+      <body className="antialiased">
+        <div className="flex min-h-screen bg-gray-50/50">
+          <Sidebar />
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+        <PushManager />
+        
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(
+                  navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
                     function(registration) {
-                      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                      console.log('SW Registered:', registration.scope);
                     },
                     function(err) {
-                      console.log('ServiceWorker registration failed: ', err);
+                      console.log('SW Registration failed:', err);
                     }
                   );
                 });

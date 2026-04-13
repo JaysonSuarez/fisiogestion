@@ -1,36 +1,31 @@
 self.addEventListener('install', (event) => {
-  console.log('SW installed');
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('SW activated');
   event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener('fetch', (event) => {
-  // basic fetch listener for PWA compliance
 });
 
 self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       const data = event.data.json();
+      const title = data.title || 'Nueva Notificación';
       const options = {
-        body: data.body,
-        icon: '/logo.png',
+        body: data.body || 'Tienes un nuevo mensaje.',
+        icon: '/logo.png', // Ajusta según tus iconos
         badge: '/logo.png',
-        vibrate: [200, 100, 200, 100, 200, 100, 200],
-        tag: data.tag || 'fisio-noti',
-        requireInteraction: true,
-        data: data.data || {}
+        data: {
+          url: data.data?.url || '/'
+        },
+        vibrate: [100, 50, 100],
       };
-      
+
       event.waitUntil(
-        self.registration.showNotification(data.title, options)
+        self.registration.showNotification(title, options)
       );
     } catch (e) {
-      console.error('Error parsing push data', e);
+      console.error('Error parsing push data:', e);
     }
   }
 });
@@ -38,38 +33,20 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const urlToOpen = new URL('/', self.location.origin).href;
-  
-  const promiseChain = self.clients.matchAll({
-    type: 'window',
-    includeUncontrolled: true
-  }).then((windowClients) => {
-    let matchingClient = null;
+  const urlToOpen = event.notification.data.url || '/';
 
-    for (let i = 0; i < windowClients.length; i++) {
-        const windowClient = windowClients[i];
-        if (windowClient.url.includes(self.location.origin)) {
-            matchingClient = windowClient;
-            break;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Si hay una pestaña abierta, enfocarla
+      for (const client of windowClients) {
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
         }
-    }
-
-    if (matchingClient) {
-      // Send a message to the open window to trigger WA or modal
-      matchingClient.postMessage({ 
-        type: 'OPEN_WHATSAPP', 
-        data: event.notification.data 
-      });
-      return matchingClient.focus();
-    } else {
-      // App is closed. We must open the app with query params
-      let openUrl = urlToOpen;
-      if (event.notification.data && event.notification.data.citaId) {
-        openUrl = `${openUrl}?trigger_wa=true&cita_id=${event.notification.data.citaId}&phase=${event.notification.data.phase || '1h'}`;
       }
-      return self.clients.openWindow(openUrl);
-    }
-  });
-
-  event.waitUntil(promiseChain);
+      // Si no, abrir una nueva
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(urlToOpen);
+      }
+    })
+  );
 });
