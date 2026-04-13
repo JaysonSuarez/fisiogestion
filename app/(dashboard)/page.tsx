@@ -26,6 +26,7 @@ import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 import { formatCOP, format12h, getIniciales } from '@/lib/utils'
 
 export default function DashboardPage() {
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default')
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>({
     pacientesActivos: 0,
@@ -155,9 +156,16 @@ export default function DashboardPage() {
     }
   }
 
-  // Pedir permiso al inicio
+  // Pedir permiso al inicio y actualizar estado
   useEffect(() => {
-    requestNotificationPermission()
+    if (!('Notification' in window)) {
+      setNotificationPermission('unsupported')
+    } else {
+      setNotificationPermission(Notification.permission)
+      if (Notification.permission === 'granted') {
+        requestNotificationPermission()
+      }
+    }
   }, [])
 
   // Manejar interacciones de notificaciones PUSH
@@ -284,6 +292,38 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {/* Notification Banner - Premium Design */}
+      {notificationPermission === 'default' && (
+        <div className="mb-10 p-8 bg-rose-600 rounded-[40px] text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-rose-200/50 animate-in slide-in-from-top-10 duration-1000 relative overflow-hidden group">
+           <div className="absolute -right-10 -top-10 text-white/10 group-hover:rotate-12 transition-transform duration-700">
+              <Sparkles size={160} />
+           </div>
+           <div className="flex items-center gap-6 relative z-10">
+              <div className="p-4 bg-white/20 backdrop-blur-md rounded-3xl shadow-inner animate-bounce">
+                 <MessageCircle size={32} />
+              </div>
+              <div>
+                 <h4 className="font-black uppercase tracking-[0.2em] text-sm mb-1">Activar Notificaciones</h4>
+                 <p className="text-[11px] opacity-90 font-bold uppercase tracking-tight max-w-sm leading-relaxed">
+                    Recibe alertas automáticas de tus pacientes y recordatorios de citas directamente en tu móvil. ✨
+                 </p>
+              </div>
+           </div>
+           <button 
+             onClick={async () => {
+               const permission = await Notification.requestPermission()
+               setNotificationPermission(permission)
+               if (permission === 'granted') {
+                 requestNotificationPermission()
+               }
+             }}
+             className="relative z-10 px-10 py-4 bg-white text-rose-600 rounded-[24px] font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_10px_30px_-5px_rgba(255,255,255,0.4)] whitespace-nowrap"
+           >
+             Permitir Ahora
+           </button>
+        </div>
+      )}
 
       <SolicitudesWidget />
 
