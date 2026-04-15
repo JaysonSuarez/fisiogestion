@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fisio-gestion-v1';
+const CACHE_NAME = 'fisio-gestion-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
