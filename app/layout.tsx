@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import SplashScreen from '@/components/ui/SplashScreen'
 
 export const metadata: Metadata = {
   title: 'FisioGestión',
@@ -36,7 +35,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="FisioGestión" />
       </head>
       <body className="antialiased bg-gray-50/50">
-        <SplashScreen />
         {children}
         
         <script
