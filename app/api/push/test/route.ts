@@ -27,7 +27,8 @@ export async function POST() {
     .from('push_subscriptions')
     .select('subscription_data')
     .eq('user_id', user.id)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
   if (!subscription) {
     return NextResponse.json({ error: 'No se encontró suscripción para este dispositivo' }, { status: 404 })
