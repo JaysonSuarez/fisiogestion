@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import SplashScreen from '@/components/ui/SplashScreen'
 
 export const metadata: Metadata = {
   title: 'FisioGestión',
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="FisioGestión" />
       </head>
       <body className="antialiased bg-gray-50/50">
+        <SplashScreen />
         {children}
         
         <script
@@ -43,7 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
-                    function(registration) {
+                     function(registration) {
                       console.log('SW Registered:', registration.scope);
                     },
                     function(err) {
