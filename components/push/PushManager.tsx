@@ -13,7 +13,6 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
   const [isIOS, setIsIOS] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [showIOSBanner, setShowIOSBanner] = useState(false);
 
   useEffect(() => {
@@ -44,18 +43,17 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
   }, []);
 
   const handleSubscribe = async () => {
-    // No hacer nada si ya está suscrito correctamente
-    if (isSubscribed && permission === 'granted') return;
+    // Si ya tiene permiso, no hacer nada
+    if (permission === 'granted') return;
 
-    setLoading(true);
     try {
       const success = await subscribeUser();
       if (success) {
         setIsSubscribed(true);
         setPermission('granted');
       }
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      console.error('handleSubscribe error:', e);
     }
   };
 
@@ -89,25 +87,23 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
   // En iOS, la campana solo se muestra si la app está instalada (standalone)
   if (isIOS && !isStandalone) return null;
 
-  const isActive = permission === 'granted' && isSubscribed;
+  // Verde si el permiso ya fue aceptado — sin esperar confirmación de Supabase
+  const isActive = permission === 'granted';
 
   if (mode === 'inline') {
     return (
       <div className="flex items-center">
         <button
           onClick={handleSubscribe}
-          disabled={isActive || loading}
           className={`shrink-0 p-3 rounded-2xl shadow-xl border transition-all duration-300 active:scale-95 relative ${
             isActive
               ? 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/30 cursor-default'
-              : loading
-              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-wait'
               : 'bg-white text-rose-500 border-rose-100 hover:scale-110 animate-bounce'
           }`}
           title={isActive ? 'Notificaciones Activas ✓' : 'Activar Notificaciones'}
         >
           <Bell className="w-6 h-6" />
-          {!isActive && !loading && (
+          {!isActive && (
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-600 rounded-full border-2 border-white animate-ping" />
           )}
         </button>
@@ -122,7 +118,6 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
     <div className="fixed bottom-24 right-6 z-40">
       <button
         onClick={handleSubscribe}
-        disabled={isActive || loading}
         className={`p-4 rounded-full shadow-lg transition-all active:scale-95 ${
           isActive
             ? 'bg-emerald-500 text-white cursor-default'
