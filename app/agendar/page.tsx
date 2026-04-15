@@ -116,6 +116,7 @@ export default function AgendarPage() {
     if (!planSeleccionado) return
     setIsLoading(true)
     try {
+      // 1. Guardar la solicitud en la base de datos
       const { error } = await supabase
         .from('solicitudes_cita')
         .insert([{
@@ -134,10 +135,28 @@ export default function AgendarPage() {
           hora_preferida: slotsSeleccionados[0]?.hora || '08:00',
           estado: 'pendiente',
         }])
+      
       if (error) throw error
+
+      // 2. Disparar notificación push al profesional (Liliana)
+      try {
+        await fetch('/api/push/request-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            nombre: `${nombre} ${apellido}`,
+            num_sesiones: planSeleccionado.sesiones
+          })
+        });
+      } catch (pushErr) {
+        console.error('Error enviando notificación push:', pushErr);
+        // No lanzamos error para que el usuario vea su confirmación de todas formas
+      }
+
       setStep('enviado')
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      console.error('Error al enviar solicitud:', err)
+      alert('Tuvimos un problema al enviar tu solicitud: ' + (err.message || 'Error desconocido'))
     } finally {
       setIsLoading(false)
     }

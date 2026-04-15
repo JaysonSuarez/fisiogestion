@@ -12,11 +12,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 })
     }
 
-    // Configuración específica para Gemma 3 - 27B
+    // Usamos Gemini 1.5 Flash: el más rápido y preciso para tareas de texto
     const model = genAI.getGenerativeModel({ 
-      model: "gemma-3-27b-it",
+      model: "gemini-1.5-flash",
       generationConfig: {
-        temperature: 0.15, // Mínima aleatoriedad para máxima precisión clínica
+        temperature: 0.15,
         topP: 0.95,
       }
     });
