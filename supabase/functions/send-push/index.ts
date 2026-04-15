@@ -20,15 +20,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Obtener la suscripción del usuario
-    const { data: subscription, error: subError } = await supabase
+    // Dado que no hay auth estricto, obremos enviando a todas las suscripciones o a las válidas
+    const { data: subscriptions, error: subError } = await supabase
       .from('push_subscriptions')
-      .select('subscription_data')
-      .eq('user_id', target_user_id)
-      .single()
+      .select('subscription_data, user_id')
 
-    if (subError || !subscription) {
-      return new Response(JSON.stringify({ error: 'Subscription not found' }), {
+    if (subError || !subscriptions || subscriptions.length === 0) {
+      return new Response(JSON.stringify({ error: 'No subscriptions found' }), {
         status: 404,
         headers: { ..._corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -36,7 +34,7 @@ serve(async (req) => {
 
     const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')
     const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')
-    const userEmail = 'mailto:admin@fisiogestion.com' // Ajustar si es necesario
+    const userEmail = 'mailto:admin@fisiogestion.com'
 
     if (!vapidPublicKey || !vapidPrivateKey) {
       throw new Error('VAPID keys not configured in Edge Function')
@@ -50,29 +48,30 @@ serve(async (req) => {
       data: { url: url || '/' }
     })
 
-    try {
-      await webpush.sendNotification(subscription.subscription_data, payload)
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ..._corsHeaders, 'Content-Type': 'application/json' },
-      })
-    } catch (pushError) {
-      console.error('Push error:', pushError)
-      
-      // Si el token expiró o es inválido (404 o 410), eliminarlo
-      if (pushError.statusCode === 404 || pushError.statusCode === 410) {
-        await supabase
-          .from('push_subscriptions')
-          .delete()
-          .eq('user_id', target_user_id)
-          
-        return new Response(JSON.stringify({ error: 'Subscription expired and removed' }), {
-          status: pushError.statusCode,
-          headers: { ..._corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
+    const results = []
 
-      throw pushError
+    for (const sub of subscriptions) {
+      if (!sub.subscription_data || !sub.subscription_data.endpoint) continue;
+
+      try {
+        await webpush.sendNotification(sub.subscription_data, payload)
+        results.push({ success: true, endpoint: sub.subscription_data.endpoint })
+      } catch (pushError: any) {
+        console.error('Push error:', pushError)
+        // Limpiamos los expirados
+        if (pushError.statusCode === 404 || pushError.statusCode === 410) {
+          await supabase
+            .from('push_subscriptions')
+            .delete()
+            .eq('subscription_data->>endpoint', sub.subscription_data.endpoint)
+        }
+        results.push({ error: pushError.message, endpoint: sub.subscription_data.endpoint })
+      }
     }
+
+    return new Response(JSON.stringify({ success: true, results }), {
+      headers: { ..._corsHeaders, 'Content-Type': 'application/json' },
+    })
 
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
