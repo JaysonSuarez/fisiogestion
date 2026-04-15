@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Heart, Sparkles, Loader2, Lock, Mail } from 'lucide-react'
@@ -12,34 +12,51 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
+  // Verificar si ya hay una sesión al cargar para evitar el bucle
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        window.location.href = '/'
+      }
+    })
+  }, [])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
+    
     setLoading(true)
     setError(null)
+    console.log('Intentando iniciar sesión...')
 
     try {
-      // Intentar login
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (signInError) {
-        // Si no existe, intentar crear (para la primera vez)
+        console.error('Error de login:', signInError.message)
+        
+        // Si no existe, intentar crear
         if (signInError.message.includes('Invalid login credentials')) {
+          console.log('Usuario no encontrado, intentando registrar...')
           const { error: signUpError } = await supabase.auth.signUp({
             email,
             password,
           })
           if (signUpError) throw signUpError
-          setError('Cuenta creada. Revisa tu correo o intenta ingresar de nuevo.')
+          setError('Cuenta creada. Por favor, intenta entrar de nuevo.')
         } else {
           throw signInError
         }
-      } else if (data.user) {
-        router.push('/')
+      } else if (data.session) {
+        console.log('Login exitoso, redirigiendo...')
+        // Usamos window.location.href para forzar que el middleware recoja las cookies frescas
+        window.location.href = '/'
       }
     } catch (err: any) {
+      console.error('Captura de error:', err)
       setError(err.message || 'Error al ingresar')
     } finally {
       setLoading(false)
@@ -48,7 +65,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#fffafa] flex items-center justify-center p-4">
-      {/* Decorative Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-rose-100/40 rounded-full blur-[100px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-rose-200/30 rounded-full blur-[100px]" />
