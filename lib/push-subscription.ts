@@ -3,71 +3,76 @@ import { supabase } from '@/lib/supabase';
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
 }
 
-export async function subscribeUser() {
+export async function subscribeUser(): Promise<boolean> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     console.warn('Push messaging is not supported');
     return false;
   }
 
   try {
-    // Paso 7: Activación por clic (esto ya se llama desde el botón)
+    // 1. Pedir permiso al usuario
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
       console.warn('Notification permission denied');
       return false;
     }
 
-    // Paso 8: Esperar a que el SW esté activo
+    // 2. Esperar el Service Worker activo
     const registration = await navigator.serviceWorker.ready;
-    if (!registration.active) {
-      console.warn('Service worker not active yet');
-      return false;
-    }
 
-    // Usar la llave pública (VITE_ o NEXT_PUBLIC_)
-    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 
-                          process.env.VITE_VAPID_PUBLIC_KEY || 
-                          'BID8H2P1XFQ6zAOoSu8AzDHix2wyjct7RoLvCfmOVFuUJAtteowZPd64c69UsFboyfDrqYmM2jjebG1EdaF5-A0';
-    
+    // 3. Generar la llave pública VAPID
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+      'BID8H2P1XFQ6zAOoSu8AzDHix2wyjct7RoLvCfmOVFuUJAtteowZPd64c69UsFboyfDrqYmM2jjebG1EdaF5-A0';
+
     const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-    
+
+    // 4. Suscribirse al push manager del browser/iPhone
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: applicationServerKey
+      applicationServerKey,
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Sincronización: Usar toJSON() para asegurar compatibilidad con todos los navegadores
     const subscriptionJSON = subscription.toJSON();
+    const endpoint = subscriptionJSON.endpoint;
 
-    const { error } = await supabase
-      .from('push_subscriptions')
-      .upsert({
-        user_id: user?.id || null,
-        subscription_data: subscriptionJSON,
-      }, { onConflict: 'user_id' });
-
-    if (error) {
-      if (error.code === '23505') return true;
-      console.error('Error syncing with Supabase:', error);
+    if (!endpoint) {
+      console.error('No endpoint in subscription');
       return false;
     }
 
-    console.log('Push subscription successful');
+    // 5. CORRECCIÓN CRÍTICA: Primero borrar el registro viejo de este endpoint
+    //    luego insertar fresco. No usamos upsert porque user_id es null para todos
+    //    y NULL != NULL en SQL, el onConflict nunca dispara.
+    await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('subscription_data->>endpoint', endpoint);
+
+    // 6. Insertar la suscripción nueva y limpia
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .insert({
+        user_id: null,
+        subscription_data: subscriptionJSON,
+      });
+
+    if (error) {
+      console.error('Error saving subscription to Supabase:', error);
+      return false;
+    }
+
+    console.log('✅ Push subscription saved successfully');
     return true;
-  } catch (error) {
-    console.error('Push subscription failed:', error);
+  } catch (err) {
+    console.error('Push subscription failed:', err);
     return false;
   }
 }
