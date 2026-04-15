@@ -57,7 +57,7 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Redirigir a login si no hay usuario y no está en la ruta de login ni archivos estáticos
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/agendar')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

@@ -89,7 +89,7 @@ export default function DashboardPage() {
       const deudores = Object.values(deudoresMap).sort((a, b) => b.deuda - a.deuda).slice(0, 3)
 
       const { count: solicitudesCount } = await supabase
-        .from('solicitudes')
+        .from('solicitudes_cita')
         .select('*', { count: 'exact', head: true })
         .eq('estado', 'pendiente')
 
@@ -119,7 +119,7 @@ export default function DashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sesiones' }, () => loadDashboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'citas' }, () => loadDashboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes' }, () => loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes' }, () => loadDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_cita' }, () => loadDashboard())
       .subscribe()
 
     return () => {
