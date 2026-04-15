@@ -53,10 +53,10 @@ export async function subscribeUser() {
 
     const { error } = await supabase
       .from('push_subscriptions')
-      .insert({
+      .upsert({
         user_id: user?.id || null,
         subscription_data: subscriptionJSON,
-      });
+      }, { onConflict: 'user_id' });
 
     if (error) {
       if (error.code === '23505') return true;
