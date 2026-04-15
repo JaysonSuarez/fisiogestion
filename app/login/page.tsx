@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 import { Heart, Sparkles, Loader2, Lock, Mail } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('liliana@fisio.com')
-  const [password, setPassword] = useState('amor123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
