@@ -22,7 +22,8 @@ import {
   Flower,
   Sprout,
   Bell,
-  BellRing
+  BellRing,
+  LogOut
 } from 'lucide-react'
 import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 import PushManager from '@/components/push/PushManager'
@@ -247,7 +248,19 @@ export default function DashboardPage() {
                 Hola, Ft. Liliana
               </h2>
               
+              <div className="flex items-center gap-2">
                 <PushManager mode="inline" />
+                <button 
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    window.location.href = '/login'
+                  }}
+                  className="p-3 bg-white text-rose-300 hover:text-rose-600 rounded-2xl border border-rose-50 shadow-sm transition-all"
+                  title="Cerrar Sesión"
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-rose-400 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] italic">

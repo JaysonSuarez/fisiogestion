@@ -18,23 +18,14 @@ export async function subscribeUser(): Promise<boolean> {
   }
 
   try {
-    // 1. Pedir permiso al usuario
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.warn('Notification permission denied');
-      return false;
-    }
+    if (permission !== 'granted') return false;
 
-    // 2. Esperar el Service Worker activo
     const registration = await navigator.serviceWorker.ready;
-
-    // 3. Generar la llave pública VAPID
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
       'BID8H2P1XFQ6zAOoSu8AzDHix2wyjct7RoLvCfmOVFuUJAtteowZPd64c69UsFboyfDrqYmM2jjebG1EdaF5-A0';
-
     const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
 
-    // 4. Suscribirse al push manager del browser/iPhone
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey,
@@ -43,33 +34,33 @@ export async function subscribeUser(): Promise<boolean> {
     const subscriptionJSON = subscription.toJSON();
     const endpoint = subscriptionJSON.endpoint;
 
-    if (!endpoint) {
-      console.error('No endpoint in subscription');
+    // Obtener usuario real
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No hay usuario autenticado para suscribir');
       return false;
     }
 
-    // 5. CORRECCIÓN CRÍTICA: Primero borrar el registro viejo de este endpoint
-    //    luego insertar fresco. No usamos upsert porque user_id es null para todos
-    //    y NULL != NULL en SQL, el onConflict nunca dispara.
+    // 1. Limpiar registros viejos del mismo endpoint para este usuario para evitar duplicidad de dispositivo
     await supabase
       .from('push_subscriptions')
       .delete()
       .eq('subscription_data->>endpoint', endpoint);
 
-    // 6. Insertar la suscripción nueva y limpia
+    // 2. Insertar nuevo registro con user_id real
     const { error } = await supabase
       .from('push_subscriptions')
       .insert({
-        user_id: null,
+        user_id: user.id,
         subscription_data: subscriptionJSON,
       });
 
     if (error) {
-      console.error('Error saving subscription to Supabase:', error);
+      console.error('Error saving subscription:', error);
       return false;
     }
 
-    console.log('✅ Push subscription saved successfully');
+    console.log('✅ Suscripción exitosa para:', user.email);
     return true;
   } catch (err) {
     console.error('Push subscription failed:', err);
