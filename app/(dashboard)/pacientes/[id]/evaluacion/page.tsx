@@ -396,7 +396,7 @@ export default function EvaluacionPage() {
               <img 
                 src="/referencia.jpeg" 
                 alt="Mapa Anatómico Muscular" 
-                className="w-full h-auto object-contain rounded-3xl opacity-90 shadow-sm"
+                className="block w-full h-auto object-contain rounded-3xl opacity-90 shadow-sm"
                 draggable="false"
               />
 
@@ -484,8 +484,8 @@ export default function EvaluacionPage() {
                       style={{
                         left: `${zona.x}%`,
                         top: `${zona.y}%`,
-                        width: `${zona.w}%`,
-                        height: `${zona.h}%`,
+                        width: `max(${zona.w}%, 24px)`,
+                        height: `max(${zona.h}%, 24px)`,
                         mixBlendMode: isSelected ? 'multiply' : 'normal'
                       }}
                     />

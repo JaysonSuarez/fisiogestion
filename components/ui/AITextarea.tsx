@@ -57,7 +57,7 @@ export function AITextarea({
         const { done, value: chunk } = await reader.read()
         if (done) break
         
-        const text = decoder.decode(chunk)
+        const text = decoder.decode(chunk, { stream: true })
         resultText += text
         onChange(resultText)
       }

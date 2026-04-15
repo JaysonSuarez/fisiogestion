@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import Sidebar from '@/components/layout/Sidebar'
 
 export const metadata: Metadata = {
   title: 'FisioGestión',
@@ -35,13 +34,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="FisioGestión" />
       </head>
-      <body className="antialiased">
-        <div className="flex min-h-screen bg-gray-50/50">
-          <Sidebar />
-          <main className="main-content">
-            {children}
-          </main>
-        </div>
+      <body className="antialiased bg-gray-50/50">
+        {children}
         
         <script
           dangerouslySetInnerHTML={{

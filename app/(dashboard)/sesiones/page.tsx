@@ -200,15 +200,15 @@ export default function SesionesPage() {
           </h2>
           <p className="text-rose-400 font-bold text-xs uppercase tracking-widest italic">Tratamientos y Gestión de Sesiones</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
           <button 
             onClick={() => setShowHistory(!showHistory)}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${showHistory ? 'bg-rose-950 text-white shadow-xl shadow-rose-950/20' : 'bg-white text-rose-400 border border-rose-100 hover:bg-rose-50 shadow-sm'}`}
+            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${showHistory ? 'bg-rose-950 text-white shadow-xl shadow-rose-950/20' : 'bg-white text-rose-400 border border-rose-100 hover:bg-rose-50 shadow-sm'}`}
           >
             <Clock size={16} />
             {showHistory ? 'Ver Activos' : 'Ver Historial'}
           </button>
-          <Link href="/sesiones/nueva" className="flex-1 sm:flex-none p-4 bg-rose-600 text-white rounded-2xl shadow-xl shadow-rose-200 hover:bg-rose-700 active:scale-95 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
+          <Link href="/sesiones/nueva" className="w-full sm:w-auto p-4 bg-rose-600 text-white rounded-2xl shadow-xl shadow-rose-200 hover:bg-rose-700 active:scale-95 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
             <Sparkles size={18} />
             <span>Nuevo Plan</span>
           </Link>

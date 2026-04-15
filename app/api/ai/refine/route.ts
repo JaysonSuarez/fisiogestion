@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai' // Nombre correcto del paquete
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// 1. Inicializa con tu API KEY (asegúrate de tenerla en .env)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Inicializamos con tu API KEY de Google AI Studio
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export async function POST(req: Request) {
   try {
@@ -12,42 +12,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 })
     }
 
-    // 2. Obtén el modelo específico (Gemma 3 1B IT)
-    const model = genAI.getGenerativeModel({ model: "gemma-3-27b-it" });
+    // Configuración específica para Gemma 3 - 27B
+    const model = genAI.getGenerativeModel({ 
+      model: "gemma-3-27b-it",
+      generationConfig: {
+        temperature: 0.15, // Mínima aleatoriedad para máxima precisión clínica
+        topP: 0.95,
+      }
+    });
 
     const prompt = `
-Eres un asistente experto para fisioterapeutas. Tu tarea es tomar las notas rápidas o coloquiales que el fisioterapeuta escribió durante la sesión y transformarlas en un lenguaje clínico, técnico, profesional y conciso adecuado para una historia clínica o reporte de evaluación.
+Contexto: Eres un asistente experto para fisioterapeutas. 
+Tarea: Transforma notas coloquiales a lenguaje clínico, técnico, profesional y conciso adecuado para una historia clínica.
 
-El fisioterapeuta escribió esto para la sección "${fieldName}":
-"${text}"
+Sección de la evaluación: "${fieldName}"
+Entrada escrita por el fisioterapeuta: "${text}"
 
-Reescribe este texto de forma profesional. Mantén un tono objetivo.
-Devuelve ÚNICAMENTE el texto mejorado, sin introducciones, sin comillas, ni explicaciones adicionales.
-`
+Resultado técnico profesional (entrega ÚNICAMENTE el texto procesado):`
 
-    // 3. Iniciar streaming
+    // Iniciamos el streaming nativo de Gemma 3
     const result = await model.generateContentStream(prompt);
 
     const stream = new ReadableStream({
       async start(controller) {
-        for await (const chunk of result.stream) {
-          const chunkText = chunk.text();
-          controller.enqueue(new TextEncoder().encode(chunkText));
+        try {
+          for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            if (chunkText) {
+              controller.enqueue(new TextEncoder().encode(chunkText));
+            }
+          }
+          controller.close();
+        } catch (streamError) {
+          console.error('Error durante el streaming de Gemma:', streamError);
+          controller.error(streamError);
         }
-        controller.close();
       },
     });
 
     return new Response(stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
       },
     });
 
   } catch (error: any) {
-    console.error('Error in AI refine:', error)
+    console.error('Error crítico en AI Refine (Gemma 3):', error)
     return NextResponse.json(
-      { error: 'Error al generar el texto mejorado' },
+      { error: 'Error al generar el texto mejorado con Gemma' },
       { status: 500 }
     )
   }
