@@ -58,20 +58,17 @@ export default function DashboardPage() {
     }
 
     try {
-      const { count: pacientesActivos } = await supabase
-        .from('pacientes')
-        .select('*', { count: 'exact', head: true })
-        .eq('estado', 'activo')
-
-      const { data: citasHoyRaw } = await supabase
-        .from('citas')
-        .select('*, pacientes(nombre, telefono)')
-        .eq('fecha', todayStr)
-        .neq('estado', 'cancelada')
-
-      const { data: todasSesiones } = await supabase
-        .from('sesiones')
-        .select('valor, monto_pagado, diezmo_entregado, pacientes(nombre, id)')
+      const [
+        { count: pacientesActivos },
+        { data: citasHoyRaw },
+        { data: todasSesiones },
+        { count: solicitudesCount }
+      ] = await Promise.all([
+        supabase.from('pacientes').select('*', { count: 'exact', head: true }).eq('estado', 'activo'),
+        supabase.from('citas').select('*, pacientes(nombre, telefono)').eq('fecha', todayStr).neq('estado', 'cancelada'),
+        supabase.from('sesiones').select('valor, monto_pagado, diezmo_entregado, pacientes(nombre, id)'),
+        supabase.from('solicitudes_cita').select('*', { count: 'exact', head: true }).eq('estado', 'pendiente')
+      ]);
 
       const porCobrar = todasSesiones?.reduce((acc, s) => acc + (s.valor - (s.monto_pagado || 0)), 0) || 0
       const ingresoGlobal = todasSesiones?.reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
@@ -87,11 +84,6 @@ export default function DashboardPage() {
         deudoresMap[p.id].deuda += saldo
       })
       const deudores = Object.values(deudoresMap).sort((a, b) => b.deuda - a.deuda).slice(0, 3)
-
-      const { count: solicitudesCount } = await supabase
-        .from('solicitudes_cita')
-        .select('*', { count: 'exact', head: true })
-        .eq('estado', 'pendiente')
 
       const newData = {
         pacientesActivos: pacientesActivos || 0,

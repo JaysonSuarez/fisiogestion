@@ -30,14 +30,39 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // Ignorar peticiones que no sean GET
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   // No cachear peticiones a Supabase (se manejan con IndexedDB en el cliente alternativamente)
   if (url.hostname.includes('supabase.co')) {
+    return;
+  }
+
+  // Evitar interceptar requests de extensiones
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Evitar error de redirecciones en navegaciones principales (Next.js server redirects)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(event.request);
+      })
+    );
     return;
   }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
+        // Evitar cachear respuestas redirigidas
+        if (networkResponse.redirected) {
+          return networkResponse;
+        }
+
         // Verificar que la respuesta sea válida antes de cachear
         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
           return networkResponse;
