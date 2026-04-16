@@ -24,7 +24,7 @@ Resultado técnico profesional (entrega ÚNICAMENTE el texto procesado):`
 
     // Usamos Cohere para el procesamiento de texto clínico
     const response = await cohere.chat({
-      model: 'command-r-plus', // 'command-r-plus' o el solicitado 'command-a-03-2025' si está disponible
+      model: 'command-a-03-2025', // Modelo actualizado
       messages: [
         {
           role: 'user',
