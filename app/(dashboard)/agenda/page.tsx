@@ -43,7 +43,7 @@ export default function AgendaPage() {
     message: ''
   })
 
-  const weekDays = Array.from({ length: 6 }, (_, i) => {
+  const weekDays = Array.from({ length: 5 }, (_, i) => {
     const day = addDays(startOfCurrentWeek, i)
     const labels = {
       'lun': 'L', 'mar': 'M', 'mié': 'm', 'jue': 'J', 'vie': 'V', 'sáb': 'S'
@@ -73,7 +73,7 @@ export default function AgendaPage() {
         .from('citas')
         .select('*, pacientes(nombre)')
         .gte('fecha', format(startOfCurrentWeek, 'yyyy-MM-dd'))
-        .lte('fecha', format(addDays(startOfCurrentWeek, 5), 'yyyy-MM-dd'))
+        .lte('fecha', format(addDays(startOfCurrentWeek, 4), 'yyyy-MM-dd'))
         .order('hora_inicio')
       
       if (data) {
@@ -251,7 +251,7 @@ export default function AgendaPage() {
                 <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <h3 className="font-black text-lg sm:text-2xl text-rose-950 capitalize tracking-tighter">
-                {format(startOfCurrentWeek, "d", { locale: es })} al {format(addDays(startOfCurrentWeek, 5), "d 'de' MMMM", { locale: es })}
+                {format(startOfCurrentWeek, "d", { locale: es })} al {format(addDays(startOfCurrentWeek, 4), "d 'de' MMMM", { locale: es })}
               </h3>
             </div>
             <Sparkles className="text-rose-300 animate-pulse hidden sm:block" size={24} />
@@ -259,9 +259,9 @@ export default function AgendaPage() {
 
           {/* Wrapper for the scrollable area */}
           <div className="relative overflow-x-auto scrollbar-hide rounded-[24px] sm:rounded-[30px] border border-rose-50/50 -mx-2 sm:mx-0">
-            <div className="min-w-[480px] sm:min-w-full">
+            <div className="min-w-[850px] sm:min-w-full">
               {/* Header: Days */}
-              <div className="grid grid-cols-[40px_repeat(6,1fr)] sm:grid-cols-[60px_repeat(6,1fr)] gap-0.5 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-2 sm:py-4 px-1 sm:px-2">
+              <div className="grid grid-cols-[40px_repeat(5,1fr)] sm:grid-cols-[60px_repeat(5,1fr)] gap-0.5 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-2 sm:py-4 px-1 sm:px-2">
                 <div className="bg-rose-50/50 rounded-lg flex items-center justify-center text-[7px] sm:text-[10px] font-black text-rose-300 uppercase tracking-widest">H</div>
                 {weekDays.map(d => (
                   <div key={d.fecha} className="text-center group">
@@ -277,7 +277,7 @@ export default function AgendaPage() {
               </div>
 
               {/* Grid: Hours x Days */}
-              <div className="grid grid-cols-[40px_repeat(6,1fr)] sm:grid-cols-[60px_repeat(6,1fr)] gap-0.5 sm:gap-2 pb-4 px-1 sm:px-2">
+              <div className="grid grid-cols-[40px_repeat(5,1fr)] sm:grid-cols-[60px_repeat(5,1fr)] gap-0.5 sm:gap-2 pb-4 px-1 sm:px-2">
                 {HORAS.map(hora => (
                   <div key={hora} className="contents">
                     <div className="text-[8px] sm:text-[10px] font-black text-rose-300 flex items-center justify-center h-12 sm:h-20 tracking-tighter border-r border-rose-50/50 sticky left-0 bg-white/95 backdrop-blur-sm z-10 pr-1 sm:pr-2">
@@ -287,7 +287,7 @@ export default function AgendaPage() {
                     {weekDays.map(d => {
                       const cita = citas.find(c =>
                         c.fecha === d.fecha &&
-                        c.hora_inicio.startsWith(hora) &&
+                        c.hora_inicio.split(':')[0] === hora.split(':')[0] &&
                         c.estado !== 'cancelada'
                       )
                       if (cita) {
@@ -302,7 +302,7 @@ export default function AgendaPage() {
                                 <span className={`text-[5px] sm:text-[7px] font-black uppercase tracking-widest ${isCompleted ? 'text-lime-400' : 'text-rose-500'}`}>{sessionInfo}</span>
                               </div>
                               <div className={`text-[7px] sm:text-[10px] font-black truncate tracking-tight leading-none ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</div>
-                              <div className={`text-[6px] sm:text-[8px] font-bold tracking-widest uppercase mt-0.5 ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>{cita.duracion_minutos}m</div>
+                              <div className={`text-[6px] sm:text-[8px] font-bold tracking-widest uppercase mt-0.5 ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>{format12h(cita.hora_inicio)} · {cita.duracion_minutos}m</div>
                             </div>
                           </div>
                         )

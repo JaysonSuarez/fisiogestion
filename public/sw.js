@@ -30,6 +30,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // No interceptar peticiones de Next.js/Turbopack/HMR
+  if (url.pathname.startsWith('/_next') || url.pathname.includes('__next') || url.pathname.includes('hot-reloader')) {
+    return;
+  }
+
   // Ignorar peticiones que no sean GET
   if (event.request.method !== 'GET') {
     return;

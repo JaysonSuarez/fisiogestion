@@ -75,7 +75,7 @@ export default function AgendarPage() {
   }
 
   const isSlotOcupado = (fecha: string, hora: string) =>
-    citasExistentes.some(c => c.fecha === fecha && c.hora_inicio.startsWith(hora))
+    citasExistentes.some(c => c.fecha === fecha && c.hora_inicio.split(':')[0] === hora.split(':')[0])
 
   const isSlotSeleccionado = (fecha: string, hora: string) =>
     slotsSeleccionados.some(s => s.fecha === fecha && s.hora === hora)

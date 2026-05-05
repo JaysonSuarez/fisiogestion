@@ -23,9 +23,13 @@ import {
   Sprout,
   Bell,
   BellRing,
-  LogOut
+  LogOut,
+  X,
+  CheckCircle,
+  Save
 } from 'lucide-react'
 import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
+import NotificationModal from '@/components/ui/NotificationModal'
 import PushManager from '@/components/push/PushManager'
 import { OfflineSync } from '@/lib/offline-sync'
 import { formatCOP, format12h, getIniciales } from '@/lib/utils'
@@ -45,6 +49,18 @@ export default function DashboardPage() {
   // Control de recordatorios
   const [activeReminder, setActiveReminder] = useState<any>(null)
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set())
+
+  // Verification State (Asistencia)
+  const [verificationCita, setVerificationCita] = useState<any>(null)
+  const [isRescheduling, setIsRescheduling] = useState(false)
+  const [rescheduleData, setRescheduleData] = useState({ fecha: '', hora: '' })
+  const [saving, setSaving] = useState(false)
+  const [notification, setNotification] = useState<{isOpen: boolean, type: 'success' | 'error', title: string, message: string}>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: ''
+  })
 
   async function loadDashboard() {
     const now = new Date()
@@ -153,6 +169,82 @@ export default function DashboardPage() {
     return () => navigator.serviceWorker?.removeEventListener('message', handleMessage)
   }, [data.citasHoy])
 
+  // Funciones de Verificación (Misma lógica que en Agenda)
+  const handleConfirmAttendance = async (attended: boolean) => {
+    if (!verificationCita) return
+    setSaving(true)
+    try {
+      if (attended) {
+        const { error } = await supabase
+          .from('citas')
+          .update({ estado: 'completada' })
+          .eq('id', verificationCita.id)
+        
+        if (error) throw error
+        
+        setData((prev: any) => ({
+          ...prev,
+          citasHoy: prev.citasHoy.map((c: any) => 
+            c.id === verificationCita.id ? { ...c, estado: 'completada' } : c
+          )
+        }))
+        
+        setVerificationCita(null)
+        setNotification({
+          isOpen: true,
+          type: 'success',
+          title: 'Sesión Completada',
+          message: 'La cita ha sido marcada como completada correctamente.'
+        })
+      } else {
+        setIsRescheduling(true)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReschedule = async () => {
+    if (!verificationCita) return
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('citas')
+        .update({ 
+          fecha: rescheduleData.fecha, 
+          hora_inicio: rescheduleData.hora,
+          estado: 'pendiente'
+        })
+        .eq('id', verificationCita.id)
+      
+      if (error) throw error
+
+      setData((prev: any) => ({
+        ...prev,
+        citasHoy: prev.citasHoy.map((c: any) => 
+          c.id === verificationCita.id 
+            ? { ...c, fecha: rescheduleData.fecha, hora_inicio: rescheduleData.hora, estado: 'pendiente' } 
+            : c
+        )
+      }))
+      
+      setVerificationCita(null)
+      setIsRescheduling(false)
+      setNotification({
+        isOpen: true,
+        type: 'success',
+        title: 'Cita Reprogramada',
+        message: 'La cita se ha movido exitosamente.'
+      })
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // Monitor de recordatorios (revisa cada 30 segundos)
   useEffect(() => {
     const checkReminders = () => {
@@ -164,21 +256,33 @@ export default function DashboardPage() {
 
         const [hours, minutes] = cita.hora_inicio.split(':').map(Number)
         const citaTime = new Date()
+        // Aseguramos que la fecha base sea la de la cita
+        const [year, month, day] = cita.fecha.split('-').map(Number)
+        citaTime.setFullYear(year, month - 1, day)
         citaTime.setHours(hours, minutes, 0, 0)
 
         const diff = citaTime.getTime() - currentTime.getTime()
         const minsRemaining = Math.floor(diff / 60000)
 
-        // Fase 1: 1 Hora antes (entre 50 y 65 min)
+        // Verificación de citas pasadas
+        if (minsRemaining < 0 && (cita.estado === 'pendiente' || cita.estado === 'confirmada' || cita.estado === 'confirmado')) {
+          if (!verificationCita) {
+            setVerificationCita(cita)
+            setRescheduleData({ fecha: cita.fecha, hora: cita.hora_inicio.slice(0, 5) })
+          }
+          return
+        }
+
+        // Fase 1: Aproximadamente 1 Hora antes (entre 55 y 65 min)
         const id1h = `${cita.id}-1h`
-        if (minsRemaining > 50 && minsRemaining <= 65 && !remindedIds.has(id1h)) {
-          setActiveReminder({ ...cita, phase: '1h' })
+        if (minsRemaining >= 55 && minsRemaining <= 65 && !remindedIds.has(id1h)) {
+          setActiveReminder({ ...cita, phase: '1h', minsLeft: minsRemaining })
         } 
         // Fase 2: 10 Minutos antes (entre 5 y 15 min)
         else {
           const id10m = `${cita.id}-10m`
-          if (minsRemaining > 0 && minsRemaining <= 15 && !remindedIds.has(id10m)) {
-            setActiveReminder({ ...cita, phase: '10m' })
+          if (minsRemaining >= 5 && minsRemaining <= 15 && !remindedIds.has(id10m)) {
+            setActiveReminder({ ...cita, phase: '10m', minsLeft: minsRemaining })
           }
         }
       })
@@ -187,15 +291,18 @@ export default function DashboardPage() {
     // Al activar un recordatorio, disparar notificación
     if (activeReminder && !remindedIds.has(`${activeReminder.id}-${activeReminder.phase}`)) {
       const isUltimoMinuto = activeReminder.phase === '10m'
-      const titulo = isUltimoMinuto ? '¡Cita en 10 minutos! 🚨' : '¡Recordatorio de Cita! ⏰'
+      const titulo = isUltimoMinuto ? '¡Cita en pocos minutos! 🚨' : '¡Recordatorio de Cita! ⏰'
       
       if ('Notification' in window && Notification.permission === 'granted') {
         navigator.serviceWorker.ready.then(reg => {
           reg.showNotification(titulo, {
-            body: `Cita con ${activeReminder.pacientes?.nombre} a las ${format12h(activeReminder.hora_inicio)}.`,
-            icon: '/icon-192x192.png',
+            body: `Cita con ${activeReminder.pacientes?.nombre} a las ${format12h(activeReminder.hora_inicio)}. Faltan aprox. ${activeReminder.minsLeft} min.`,
+            icon: '/logo.png',
             tag: `reminder-${activeReminder.id}-${activeReminder.phase}`,
-            requireInteraction: true
+            requireInteraction: true,
+            data: {
+              url: `/?cita_id=${activeReminder.id}&phase=${activeReminder.phase}&trigger_wa=true`
+            }
           })
         })
       }
@@ -468,7 +575,7 @@ export default function DashboardPage() {
                 {activeReminder.phase === '10m' ? '¡Ya casi empieza!' : '¡Es hora de avisar!'}
               </h2>
               <p className="text-rose-400 font-medium text-sm mb-8 leading-relaxed px-4">
-                La cita con <span className="font-black text-rose-600 tracking-tight">{activeReminder.pacientes?.nombre}</span> es {activeReminder.phase === '10m' ? 'en solo 10 minutos' : 'en 1 hora'}.
+                La cita con <span className="font-black text-rose-600 tracking-tight">{activeReminder.pacientes?.nombre}</span> es a las <span className="font-black text-rose-600">{format12h(activeReminder.hora_inicio)}</span> (en aproximadamente {activeReminder.minsLeft} minutos).
               </p>
 
               <div className="space-y-4">
@@ -493,6 +600,106 @@ export default function DashboardPage() {
                   Ya lo envié, presiona aquí
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <NotificationModal 
+        isOpen={notification.isOpen}
+        onClose={() => setNotification(prev => ({...prev, isOpen: false}))}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+      />
+
+      {/* Verification Modal */}
+      {verificationCita && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-rose-950/40 backdrop-blur-md p-4">
+          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-300 border-4 border-white">
+            <div className="p-8 space-y-6">
+              <div className="flex justify-between items-center">
+                <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl">
+                  {isRescheduling ? <Calendar size={24} /> : <AlertCircle size={24} />}
+                </div>
+                <button 
+                  onClick={() => setVerificationCita(null)} 
+                  className="p-2 text-slate-300 hover:text-slate-500 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {!isRescheduling ? (
+                <>
+                  <div>
+                    <h3 className="text-2xl font-black text-rose-950 uppercase tracking-tighter leading-tight">¿Fue atendido?</h3>
+                    <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Paciente: {verificationCita.pacientes?.nombre}</p>
+                    <p className="text-[10px] font-medium text-slate-400 mt-2 leading-relaxed italic">Esta cita estaba programada para las {format12h(verificationCita.hora_inicio)}.</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-4">
+                    <button 
+                      onClick={() => handleConfirmAttendance(false)}
+                      className="py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all"
+                    >
+                      No, pendiente
+                    </button>
+                    <button 
+                      onClick={() => handleConfirmAttendance(true)}
+                      disabled={saving}
+                      className="py-4 bg-lime-50 text-lime-700 border border-lime-200 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-lime-100 hover:bg-lime-100 transition-all flex items-center justify-center gap-2"
+                    >
+                      {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                      Sí, asistió
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <h3 className="text-2xl font-black text-rose-950 uppercase tracking-tighter leading-tight">Reprogramar cita</h3>
+                    <p className="text-xs font-bold text-slate-400 mt-1">Elige la nueva fecha y hora para {verificationCita.pacientes?.nombre}</p>
+                  </div>
+
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Nueva Fecha</label>
+                      <input 
+                        type="date"
+                        value={rescheduleData.fecha}
+                        onChange={(e) => setRescheduleData({...rescheduleData, fecha: e.target.value})}
+                        className="w-full bg-rose-50/50 border-none rounded-xl px-4 py-3 text-sm font-black text-rose-950 focus:ring-2 focus:ring-rose-200"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Nueva Hora</label>
+                      <input 
+                        type="time"
+                        value={rescheduleData.hora}
+                        onChange={(e) => setRescheduleData({...rescheduleData, hora: e.target.value})}
+                        className="w-full bg-rose-50/50 border-none rounded-xl px-4 py-3 text-sm font-black text-rose-950 focus:ring-2 focus:ring-rose-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-4">
+                    <button 
+                      onClick={() => setIsRescheduling(false)}
+                      className="py-4 text-slate-400 font-black text-[10px] uppercase tracking-widest"
+                    >
+                      Atrás
+                    </button>
+                    <button 
+                      onClick={handleReschedule}
+                      disabled={saving}
+                      className="py-4 bg-rose-950 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-950/20 hover:bg-rose-900 transition-all flex items-center justify-center gap-2"
+                    >
+                      {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                      Confirmar
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
