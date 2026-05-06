@@ -261,7 +261,7 @@ export default function AgendaPage() {
           <div className="relative overflow-x-auto scrollbar-hide rounded-[24px] sm:rounded-[30px] border border-rose-50/50 -mx-2 sm:mx-0">
             <div className="min-w-[850px] sm:min-w-full">
               {/* Header: Days */}
-              <div className="grid grid-cols-[40px_repeat(5,1fr)] sm:grid-cols-[60px_repeat(5,1fr)] gap-0.5 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-2 sm:py-4 px-1 sm:px-2">
+              <div className="grid grid-cols-[40px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] gap-0.5 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-2 sm:py-4 px-1 sm:px-2">
                 <div className="bg-rose-50/50 rounded-lg flex items-center justify-center text-[7px] sm:text-[10px] font-black text-rose-300 uppercase tracking-widest">H</div>
                 {weekDays.map(d => (
                   <div key={d.fecha} className="text-center group">
@@ -277,7 +277,7 @@ export default function AgendaPage() {
               </div>
 
               {/* Grid: Hours x Days */}
-              <div className="grid grid-cols-[40px_repeat(5,1fr)] sm:grid-cols-[60px_repeat(5,1fr)] gap-0.5 sm:gap-2 pb-4 px-1 sm:px-2">
+              <div className="grid grid-cols-[40px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] gap-0.5 sm:gap-2 pb-4 px-1 sm:px-2">
                 {HORAS.map(hora => (
                   <div key={hora} className="contents">
                     <div className="text-[8px] sm:text-[10px] font-black text-rose-300 flex items-center justify-center h-12 sm:h-20 tracking-tighter border-r border-rose-50/50 sticky left-0 bg-white/95 backdrop-blur-sm z-10 pr-1 sm:pr-2">
