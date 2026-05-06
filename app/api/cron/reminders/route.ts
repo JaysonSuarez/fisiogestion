@@ -19,7 +19,28 @@ export async function GET(req: Request) {
 
   try {
     const now = new Date()
-    const todayStr = now.toISOString().split('T')[0]
+    
+    // Configurar la zona horaria a Colombia (UTC-5)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+    
+    const parts = formatter.formatToParts(now)
+    const timeObj: Record<string, string> = {}
+    parts.forEach(p => { timeObj[p.type] = p.value })
+    
+    const todayStr = `${timeObj.year}-${timeObj.month}-${timeObj.day}`
+    
+    let currentHour = parseInt(timeObj.hour, 10)
+    if (currentHour === 24) currentHour = 0
+    const currentMinute = parseInt(timeObj.minute, 10)
+    const currentMinsFromMidnight = currentHour * 60 + currentMinute
     
     // 1. Buscar citas de hoy pendientes
     const { data: citas, error } = await supabase
@@ -35,11 +56,8 @@ export async function GET(req: Request) {
 
     for (const cita of citas) {
       const [hours, minutes] = cita.hora_inicio.split(':').map(Number)
-      const citaTime = new Date()
-      citaTime.setHours(hours, minutes, 0, 0)
-
-      const diffMs = citaTime.getTime() - now.getTime()
-      const minsRemaining = Math.floor(diffMs / 60000)
+      const citaMinsFromMidnight = hours * 60 + minutes
+      const minsRemaining = citaMinsFromMidnight - currentMinsFromMidnight
 
       // --- Notificación de 1 hora (entre 55 y 65 min) ---
       if (minsRemaining > 50 && minsRemaining <= 65 && !cita.notificado_1h) {
