@@ -14,7 +14,7 @@ CREATE TABLE pacientes (
   nombre        TEXT NOT NULL,
   telefono      TEXT,
   diagnostico   TEXT,
-  valor_sesion  INTEGER NOT NULL DEFAULT 40000,
+  valor_sesion  INTEGER NOT NULL DEFAULT 50000,
   estado        TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','en_pausa','alta_medica')),
   notas_iniciales TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -88,8 +88,8 @@ CREATE TABLE diezmos (
 -- DATOS DE EJEMPLO (comentar en producción)
 -- ============================================================
 INSERT INTO pacientes (nombre, telefono, diagnostico, valor_sesion, estado) VALUES
-  ('María Ruiz',  '300 111 2222', 'Dolor lumbar crónico',      40000, 'activo'),
-  ('Carlos Vega', '315 333 4444', 'Lesión de rodilla',          40000, 'activo'),
-  ('Juan Torres', '318 555 6666', 'Rehabilitación hombro',      40000, 'activo'),
-  ('Pedro Mora',  '312 777 8888', 'Cervicalgia',                40000, 'en_pausa'),
-  ('Ana López',   '317 999 0000', 'Tobillo postoperatorio',     40000, 'activo');
+  ('María Ruiz',  '300 111 2222', 'Dolor lumbar crónico',      50000, 'activo'),
+  ('Carlos Vega', '315 333 4444', 'Lesión de rodilla',          50000, 'activo'),
+  ('Juan Torres', '318 555 6666', 'Rehabilitación hombro',      50000, 'activo'),
+  ('Pedro Mora',  '312 777 8888', 'Cervicalgia',                50000, 'en_pausa'),
+  ('Ana López',   '317 999 0000', 'Tobillo postoperatorio',     50000, 'activo');

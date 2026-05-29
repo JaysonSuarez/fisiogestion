@@ -86,8 +86,7 @@ export default function NuevaSesionPage({
   const getMinPrice = (cantidad: number, type: string) => {
     if (type === 'descarga') return 70000
     if (cantidad === 1) return 80000
-    if (cantidad === 5) return 50000
-    return 40000 
+    return 50000 
   }
 
   const handleCambioSesiones = (val: number, type: string) => {
