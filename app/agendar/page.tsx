@@ -11,10 +11,11 @@ import {
 
 // ─── Precios estáticos según número de sesiones ───────────────────────────────
 const PLANES_PRECIOS = [
-  { id: 'evaluacion', sesiones: 1, precio: 95000,  label: 'Valoración' },
-  { id: 'fisio-1',  sesiones: 1,  precio: 75000,   label: '1 sesión' },
-  { id: 'fisio-5',  sesiones: 5,  precio: 360000,  label: 'Paquete de 5 sesiones' },
-  { id: 'fisio-10', sesiones: 10, precio: 680000,  label: 'Paquete de 10 sesiones' },
+  { id: 'evaluacion', sesiones: 1, precio: 60000,  label: 'Valoración' },
+  { id: 'descarga-muscular',  sesiones: 1,  precio: 100000,  label: 'Descarga Muscular' },
+  { id: 'recovery-premium',   sesiones: 1,  precio: 100000,  label: 'Recovery Premium' },
+  { id: 'recovery-star',      sesiones: 5,  precio: 350000,  label: 'Recovery Star' },
+  { id: 'recovery-balance',   sesiones: 10, precio: 700000,  label: 'Recovery Balance' },
 ]
 
 const HORARIOS_DISPONIBLES = [
@@ -325,6 +326,8 @@ export default function AgendarPage() {
                   key={plan.id}
                   onClick={() => { setPlanSeleccionado(plan); setSlotsSeleccionados([]) }}
                   className={`p-5 rounded-[24px] border-2 text-left transition-all active:scale-95 ${
+                    plan.id === 'evaluacion' ? 'sm:col-span-2' : ''
+                  } ${
                     planSeleccionado?.id === plan.id
                       ? 'border-rose-400 bg-rose-50 shadow-lg shadow-rose-100'
                       : 'border-rose-50 bg-rose-50/30 hover:border-rose-100'
@@ -333,15 +336,16 @@ export default function AgendarPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="font-black text-rose-950 text-lg tracking-tighter uppercase">{plan.label}</div>
-                      {plan.sesiones > 1 && (
+                      {plan.sesiones > 1 ? (
                         <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
                           {formatCOP(Math.round(plan.precio / plan.sesiones))} / sesión
                         </div>
-                      )}
-                      {plan.id === 'fisio-1' && (
-                        <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
-                          {formatCOP(plan.precio)} / sesión
-                        </div>
+                      ) : (
+                        plan.id !== 'evaluacion' && (
+                          <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
+                            {formatCOP(plan.precio)} / sesión
+                          </div>
+                        )
                       )}
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
