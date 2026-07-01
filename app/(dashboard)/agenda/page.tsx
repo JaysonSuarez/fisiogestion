@@ -21,6 +21,7 @@ import {
 import NotificationModal from '@/components/ui/NotificationModal'
 import { OfflineSync } from '@/lib/offline-sync'
 import { format12h, getIniciales } from '@/lib/utils'
+import { isHolidayColombia } from '@/lib/colombian-holidays'
 
 export default function AgendaPage() {
   const [loading, setLoading] = useState(true)
@@ -44,12 +45,12 @@ export default function AgendaPage() {
     message: ''
   })
 
-  const weekDays = Array.from({ length: 5 }, (_, i) => {
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = addDays(startOfCurrentWeek, i)
     const labels = {
-      'lun': 'L', 'mar': 'M', 'mié': 'm', 'jue': 'J', 'vie': 'V', 'sáb': 'S'
+      'lun': 'L', 'mar': 'M', 'mié': 'M', 'jue': 'J', 'vie': 'V', 'sáb': 'S', 'dom': 'D'
     } as any
-    const fullLabel = format(day, 'eee', { locale: es }).replace('.', '')
+    const fullLabel = format(day, 'eee', { locale: es }).replace('.', '').toLowerCase()
     return {
       label: fullLabel,
       shortLabel: labels[fullLabel] || fullLabel[0].toUpperCase(),
@@ -78,7 +79,7 @@ export default function AgendaPage() {
         .from('citas')
         .select('*, pacientes(nombre)')
         .gte('fecha', format(startOfCurrentWeek, 'yyyy-MM-dd'))
-        .lte('fecha', format(addDays(startOfCurrentWeek, 4), 'yyyy-MM-dd'))
+        .lte('fecha', format(addDays(startOfCurrentWeek, 6), 'yyyy-MM-dd'))
         .order('hora_inicio')
 
       if (isLu) {
@@ -272,7 +273,7 @@ export default function AgendaPage() {
                 <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <h3 className="font-black text-lg sm:text-2xl text-rose-950 capitalize tracking-tighter">
-                {format(startOfCurrentWeek, "d", { locale: es })} al {format(addDays(startOfCurrentWeek, 4), "d 'de' MMMM", { locale: es })}
+                {format(startOfCurrentWeek, "d", { locale: es })} al {format(addDays(startOfCurrentWeek, 6), "d 'de' MMMM", { locale: es })}
               </h3>
             </div>
             <Sparkles className="text-rose-300 animate-pulse hidden sm:block" size={24} />
@@ -282,7 +283,7 @@ export default function AgendaPage() {
           <div className="relative overflow-x-auto scrollbar-hide rounded-[24px] sm:rounded-[30px] border border-rose-50/50 -mx-2 sm:mx-0">
             <div className="min-w-[850px] sm:min-w-full">
               {/* Header: Days */}
-              <div className="grid grid-cols-[40px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] gap-0.5 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-2 sm:py-4 px-1 sm:px-2">
+              <div className="grid grid-cols-[40px_repeat(7,1fr)] sm:grid-cols-[60px_repeat(7,1fr)] gap-0.5 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-2 sm:py-4 px-1 sm:px-2">
                 <div className="bg-rose-50/50 rounded-lg flex items-center justify-center text-[7px] sm:text-[10px] font-black text-rose-300 uppercase tracking-widest">H</div>
                 {weekDays.map(d => (
                   <div key={d.fecha} className="text-center group">
@@ -298,7 +299,7 @@ export default function AgendaPage() {
               </div>
 
               {/* Grid: Hours x Days */}
-              <div className="grid grid-cols-[40px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] gap-0.5 sm:gap-2 pb-4 px-1 sm:px-2">
+              <div className="grid grid-cols-[40px_repeat(7,1fr)] sm:grid-cols-[60px_repeat(7,1fr)] gap-0.5 sm:gap-2 pb-4 px-1 sm:px-2">
                 {HORAS.map(hora => (
                   <div key={hora} className="contents">
                     <div className="text-[8px] sm:text-[10px] font-black text-rose-300 flex items-center justify-center h-12 sm:h-20 tracking-tighter border-r border-rose-50/50 sticky left-0 bg-white/95 backdrop-blur-sm z-10 pr-1 sm:pr-2">
@@ -306,6 +307,20 @@ export default function AgendaPage() {
                       <span className="inline sm:hidden">{format12h(hora).replace(' ', '').replace(':00', '')}</span>
                     </div>
                     {weekDays.map(d => {
+                      const date = new Date(d.fecha + 'T12:00:00')
+                      const isSun = date.getDay() === 0
+                      const isSat = date.getDay() === 6
+                      const isHol = isHolidayColombia(d.fecha)
+
+                      let isWorkingHour = true
+                      if (isSun || isHol) {
+                        isWorkingHour = ['08:00', '09:00', '10:00', '11:00'].includes(hora)
+                      } else if (isSat) {
+                        isWorkingHour = false
+                      } else {
+                        isWorkingHour = ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'].includes(hora)
+                      }
+
                       const cita = citas.find(c =>
                         c.fecha === d.fecha &&
                         c.hora_inicio.split(':')[0] === hora.split(':')[0] &&
@@ -328,6 +343,13 @@ export default function AgendaPage() {
                                 {cita.fisioterapeuta && !isLuisa && ` · ${cita.fisioterapeuta}`}
                               </div>
                             </div>
+                          </div>
+                        )
+                      }
+                      if (!isWorkingHour) {
+                        return (
+                          <div key={`${d.fecha}-${hora}`} className="h-12 sm:h-20 p-[1px] sm:p-0.5 opacity-25">
+                            <div className="h-full w-full rounded-[8px] sm:rounded-[20px] bg-slate-100/40 border border-slate-200/20 cursor-not-allowed" />
                           </div>
                         )
                       }

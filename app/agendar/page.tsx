@@ -8,6 +8,7 @@ import {
   Heart, Flower2, CheckCircle, Loader2, Calendar, Clock, User,
   Phone, Stethoscope, ChevronRight, ChevronLeft, Sparkles, Info
 } from 'lucide-react'
+import { isHolidayColombia } from '@/lib/colombian-holidays'
 
 // ─── Precios estáticos según número de sesiones ───────────────────────────────
 const PLANES_PRECIOS = [
@@ -68,14 +69,31 @@ export default function AgendarPage() {
     setCitasExistentes(data || [])
   }
 
-  const isSlotOcupado = (fecha: string, hora: string) =>
-    citasExistentes.some(c => c.fecha === fecha && c.hora_inicio.split(':')[0] === hora.split(':')[0])
+  const isSlotRealmenteOcupado = (fecha: string, hora: string) => {
+    const isOcupado = citasExistentes.some(c => c.fecha === fecha && c.hora_inicio.split(':')[0] === hora.split(':')[0])
+    
+    const date = new Date(fecha + 'T12:00:00')
+    const isSun = date.getDay() === 0
+    const isSat = date.getDay() === 6
+    const isHol = isHolidayColombia(fecha)
+    
+    let isHourAllowed = true
+    if (isSun || isHol) {
+      isHourAllowed = ['08:00', '09:00', '10:00', '11:00'].includes(hora)
+    } else if (isSat) {
+      isHourAllowed = false
+    } else {
+      isHourAllowed = ['07:00', '08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'].includes(hora)
+    }
+    
+    return isOcupado || !isHourAllowed
+  }
 
   const isSlotSeleccionado = (fecha: string, hora: string) =>
     slotsSeleccionados.some(s => s.fecha === fecha && s.hora === hora)
 
   const toggleSlot = (fecha: string, hora: string) => {
-    if (isSlotOcupado(fecha, hora)) return
+    if (isSlotRealmenteOcupado(fecha, hora)) return
     const isPast = isBefore(new Date(`${fecha}T${hora}`), new Date())
     if (isPast) return
 
@@ -91,8 +109,8 @@ export default function AgendarPage() {
   const weekDays = (() => {
     const days = []
     let current = startOfDay(weekStart)
-    while (days.length < 5) {
-      if (current.getDay() !== 0 && current.getDay() !== 6) {
+    while (days.length < 6) {
+      if (current.getDay() !== 6) { // Skip Saturday
         days.push({
           label: format(current, 'eee', { locale: es }),
           num: format(current, 'd'),
@@ -406,7 +424,7 @@ export default function AgendarPage() {
               <div className="text-center">
                 <div className="text-[10px] font-black text-rose-300 uppercase tracking-widest mb-1">Citas Disponibles</div>
                 <div className="font-black text-rose-950 text-sm uppercase tracking-tighter">
-                  {format(weekDays[0].fecha + 'T12:00', "d MMM", { locale: es })} – {format(weekDays[4].fecha + 'T12:00', "d MMM yyyy", { locale: es })}
+                  {format(weekDays[0].fecha + 'T12:00', "d MMM", { locale: es })} – {format(weekDays[5].fecha + 'T12:00', "d MMM yyyy", { locale: es })}
                 </div>
               </div>
               <button
@@ -421,7 +439,7 @@ export default function AgendarPage() {
             <div className="overflow-x-auto -mx-2 px-2 pb-2">
               <div className="min-w-[440px]">
                 {/* Days header */}
-                <div className="grid grid-cols-[52px_repeat(5,1fr)] gap-2 mb-3">
+                <div className="grid grid-cols-[52px_repeat(6,1fr)] gap-2 mb-3">
                   <div className="text-[8px] font-black text-rose-300 uppercase tracking-widest flex items-center justify-center">Hora</div>
                   {weekDays.map(d => (
                     <div key={d.fecha} className={`text-center py-2 ${d.isPast ? 'opacity-30' : ''}`}>
@@ -435,12 +453,12 @@ export default function AgendarPage() {
 
                 {/* Time slots */}
                 {HORARIOS_DISPONIBLES.map(hora => (
-                  <div key={hora} className="grid grid-cols-[52px_repeat(5,1fr)] gap-2 mb-2">
+                  <div key={hora} className="grid grid-cols-[52px_repeat(6,1fr)] gap-2 mb-2">
                     <div className="text-[9px] font-black text-rose-400 flex items-center justify-center h-12 bg-rose-50/50 rounded-xl">
                       {format12h(hora)}
                     </div>
                     {weekDays.map(d => {
-                      const ocupado = isSlotOcupado(d.fecha, hora)
+                      const ocupado = isSlotRealmenteOcupado(d.fecha, hora)
                       const seleccionado = isSlotSeleccionado(d.fecha, hora)
                       const lleno = slotsSeleccionados.length >= planSeleccionado.sesiones && !seleccionado
                       const pasado = d.isPast || isBefore(new Date(`${d.fecha}T${hora}`), new Date())
