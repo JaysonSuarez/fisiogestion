@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, getCachedUser } from '@/lib/supabase';
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -35,7 +35,7 @@ export async function subscribeUser(): Promise<boolean> {
     const endpoint = subscriptionJSON.endpoint;
 
     // Obtener usuario real
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
     if (!user) {
       console.warn('No hay usuario autenticado para suscribir');
       return false;

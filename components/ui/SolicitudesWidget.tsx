@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { Bell, X, Check, Calendar, User, Phone, Stethoscope, Loader2, Heart, ChevronDown, ChevronUp } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -26,8 +26,14 @@ export default function SolicitudesWidget() {
     setSolicitudes(data || [])
   }
 
+  const [isLuisa, setIsLuisa] = useState(false)
+
   useEffect(() => {
     loadSolicitudes()
+    getCachedUser().then((user) => {
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
+    })
     const channel = supabase
       .channel('solicitudes-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'solicitudes_cita' }, () => loadSolicitudes())
@@ -50,6 +56,7 @@ export default function SolicitudesWidget() {
           notas_iniciales: `Paciente agendó en línea. Edad: ${solicitud.edad} años.`,
           total_sesiones: solicitud.num_sesiones,
           valor_sesion: solicitud.precio_sesion,
+          fisioterapeuta: isLuisa ? 'Luisa' : 'Liliana'
         }])
         .select()
         .single()
@@ -84,6 +91,7 @@ export default function SolicitudesWidget() {
         hora_inicio: slot.hora,
         duracion_minutos: 60,
         estado: 'confirmada',
+        fisioterapeuta: isLuisa ? 'Luisa' : 'Liliana',
         notas: `Sesión agendada en línea. Diagnóstico: ${solicitud.diagnostico}`,
       }))
 

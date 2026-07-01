@@ -5,21 +5,21 @@
 @tailwind utilities;
 
 :root {
-  /* Premium Palette - Rosita Fresita */
-  --c-primary:    #ec4899; 
-  --c-primary-soft: rgba(236, 72, 153, 0.1);
-  --c-primary-dark: #be185d;
+  /* Premium Palette - New Branding */
+  --c-primary:    #B97A88; 
+  --c-primary-soft: rgba(185, 122, 136, 0.1);
+  --c-primary-dark: #9f6572;
   
-  --c-teal:       #f43f5e; 
-  --c-teal-soft:  rgba(244, 63, 94, 0.1);
+  --c-teal:       #344B5C; 
+  --c-teal-soft:  rgba(52, 75, 92, 0.1);
   
-  --c-bg-page:   #fff1f2; 
+  --c-bg-page:   #FAF8F9; 
   --c-bg-card:   #ffffff;
-  --c-border:    rgba(251, 113, 133, 0.2); 
+  --c-border:    rgba(185, 122, 136, 0.2); 
   
-  --c-text-main: #4c0519; 
-  --c-text-mid:  #9f1239; 
-  --c-text-low:  #fda4af; 
+  --c-text-main: #344B5C; 
+  --c-text-mid:  #B97A88; 
+  --c-text-low:  #d1a3ad; 
 
   --c-success:   #10b981;
   --c-danger:    #e11d48;

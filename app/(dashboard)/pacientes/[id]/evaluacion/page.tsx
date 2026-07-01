@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { generateEvaluacionPDF } from '@/lib/generate-evaluacion-pdf'
 import {
   ArrowLeft, Save, Loader2, FileText, User, Stethoscope,
   Activity, ClipboardList, Target, Lightbulb, Heart, Download,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react'
 import { AITextarea } from '@/components/ui/AITextarea'
 
@@ -99,6 +99,9 @@ export default function EvaluacionPage() {
   const params = useParams()
   const pacienteId = params.id as string
 
+  const [isLuisa, setIsLuisa] = useState(false)
+  const [selectedFisio, setSelectedFisio] = useState('Liliana')
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [patient, setPatient] = useState<any>(null)
@@ -140,53 +143,103 @@ export default function EvaluacionPage() {
     ejercicios_casa: '',
     cambios_posturales: '',
     actividades_evitar: '',
-    mapa_dolor: [] as string[],
+    mapa_dolor: [] as any[]
   })
 
   const updateField = (key: string, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }))
 
+  const [generatingPlan, setGeneratingPlan] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const handleGenerateAIPlan = async () => {
+    if (!form.motivo_consulta && !form.diagnostico_fisio && !form.hallazgos) {
+      setAiError('Por favor llena primero el motivo de consulta, hallazgos o diagnóstico.')
+      setTimeout(() => setAiError(null), 4000)
+      return
+    }
+
+    setGeneratingPlan(true)
+    setAiError(null)
+
+    try {
+      const res = await fetch('/api/ai/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          motivo_consulta: form.motivo_consulta,
+          diagnostico_fisio: form.diagnostico_fisio,
+          hallazgos: form.hallazgos,
+          escala_eva: form.escala_eva
+        })
+      })
+
+      if (!res.ok) {
+        throw new Error('Error al conectar con el asistente de IA')
+      }
+
+      const data = await res.json()
+      
+      setForm(prev => ({
+        ...prev,
+        objetivos_corto_plazo: data.objetivos_corto_plazo || prev.objetivos_corto_plazo,
+        objetivos_mediano_plazo: data.objetivos_mediano_plazo || prev.objetivos_mediano_plazo,
+        objetivos_largo_plazo: data.objetivos_largo_plazo || prev.objetivos_largo_plazo,
+        tipo_intervencion: data.tipo_intervencion || prev.tipo_intervencion,
+        frecuencia_tratamiento: data.frecuencia_tratamiento || prev.frecuencia_tratamiento,
+        ejercicios_casa: data.ejercicios_casa || prev.ejercicios_casa
+      }))
+
+    } catch (err: any) {
+      console.error(err)
+      setAiError(err.message || 'No se pudo generar el plan.')
+      setTimeout(() => setAiError(null), 4000)
+    } finally {
+      setGeneratingPlan(false)
+    }
+  }
+
   useEffect(() => {
     loadData()
-  }, [pacienteId])
+  }, [])
 
   async function loadData() {
     try {
-      // Load patient
-      const { data: pData } = await supabase
-        .from('pacientes')
-        .select('*')
-        .eq('id', pacienteId)
-        .single()
-      setPatient(pData)
+      const user = await getCachedUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
 
-      // Load existing evaluation if any
-      const { data: eData } = await supabase
-        .from('evaluaciones')
-        .select('*')
-        .eq('paciente_id', pacienteId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+      const [pRes, evalRes] = await Promise.all([
+        supabase.from('pacientes').select('*').eq('id', pacienteId).single(),
+        supabase.from('evaluaciones').select('*').eq('paciente_id', pacienteId).maybeSingle()
+      ])
+
+      const pData = pRes.data
+      setPatient(pData)
+      
+      const eData = evalRes.data
 
       const newForm: any = { ...form }
-      
-      // Auto-fill patient data
-      if (pData?.documento_identidad) newForm.documento_identidad = pData.documento_identidad
-      if (pData?.sexo) newForm.sexo = pData.sexo
+      if (pData) {
+        newForm.sexo = pData.sexo || ''
+        newForm.documento_identidad = pData.documento_identidad || ''
+      }
 
       if (eData) {
         setEvaluacion(eData)
+        setSelectedFisio(eData.fisioterapeuta || (isLu ? 'Luisa' : 'Liliana'))
         // Populate form
         Object.keys(newForm).forEach(key => {
           if (eData[key] !== undefined && eData[key] !== null) {
             if (key === 'mapa_dolor') {
-              newForm[key] = Array.isArray(eData[key]) ? eData[key] : []
+              newForm[key as keyof typeof form] = Array.isArray(eData[key]) ? eData[key] : []
             } else if (String(eData[key]).trim() !== '') {
-              newForm[key] = String(eData[key])
+              newForm[key as keyof typeof form] = String(eData[key]) as any
             }
           }
         })
+      } else {
+        setSelectedFisio(isLu ? 'Luisa' : 'Liliana')
       }
       setForm(newForm)
 
@@ -222,6 +275,7 @@ export default function EvaluacionPage() {
       const payload = {
         paciente_id: pacienteId,
         ...form,
+        fisioterapeuta: selectedFisio,
         escala_eva: form.escala_eva ? parseInt(form.escala_eva) : null,
         updated_at: new Date().toISOString(),
       }
@@ -331,6 +385,19 @@ export default function EvaluacionPage() {
             <FormField label="Fecha de valoración" name="fecha_valoracion" value={form.fecha_valoracion} onChange={v => updateField('fecha_valoracion', v)} type="date" />
           </div>
           <FormField label="Ocupación" name="ocupacion" value={form.ocupacion} onChange={v => updateField('ocupacion', v)} placeholder="Ej: Oficinista, deportista, ama de casa…" />
+          {!isLuisa && (
+            <div className="mt-4 max-w-xs">
+              <label className="text-[10px] font-black text-rose-300 uppercase tracking-widest mb-2 block font-bold">Fisioterapeuta Asignada</label>
+              <select
+                value={selectedFisio}
+                onChange={e => setSelectedFisio(e.target.value)}
+                className="w-full bg-rose-50/50 border border-rose-100 text-rose-950 font-black rounded-[20px] px-4 py-3 shadow-sm uppercase tracking-widest text-xs outline-none focus:ring-2 focus:ring-rose-200 cursor-pointer"
+              >
+                <option value="Liliana">Liliana</option>
+                <option value="Luisa">Luisa</option>
+              </select>
+            </div>
+          )}
         </Section>
 
         {/* 2. Motivo de consulta */}
@@ -552,6 +619,38 @@ export default function EvaluacionPage() {
 
         {/* 10. Objetivos del tratamiento */}
         <Section number={10} title="Objetivos del Tratamiento" icon={Target}>
+          <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h4 className="text-[10px] font-black text-indigo-950 uppercase tracking-widest flex items-center gap-1.5">
+                <Sparkles size={12} className="text-indigo-500" />
+                Asistente Fisioterapéutico
+              </h4>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-1">Genera objetivos y plan de cuidado basados en tus notas</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateAIPlan}
+              disabled={generatingPlan}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 flex items-center gap-2 disabled:opacity-50 transition-all active:scale-95 shrink-0"
+            >
+              {generatingPlan ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={12} fill="white" />
+                  Sugerir Plan con IA
+                </>
+              )}
+            </button>
+          </div>
+          {aiError && (
+            <div className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-4 py-2.5 mb-4 animate-in fade-in duration-200">
+              ⚠️ {aiError}
+            </div>
+          )}
           <FormField label="Corto plazo (disminuir dolor)" name="objetivos_corto_plazo" value={form.objetivos_corto_plazo} onChange={v => updateField('objetivos_corto_plazo', v)} multiline />
           <FormField label="Mediano plazo (mejorar movilidad)" name="objetivos_mediano_plazo" value={form.objetivos_mediano_plazo} onChange={v => updateField('objetivos_mediano_plazo', v)} multiline />
           <FormField label="Largo plazo (recuperar función)" name="objetivos_largo_plazo" value={form.objetivos_largo_plazo} onChange={v => updateField('objetivos_largo_plazo', v)} multiline />

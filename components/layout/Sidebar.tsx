@@ -1,5 +1,7 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { usePathname } from 'next/navigation'
 import { useRef, useEffect, useState } from 'react'
 import {
@@ -23,6 +25,24 @@ export default function Sidebar() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isVisible, setIsVisible] = useState(true)
   const lastScrollY = useRef(0)
+  const [isLuisa, setIsLuisa] = useState(false)
+  const [userProfile, setUserProfile] = useState({ name: 'Ft. Liliana G.', initial: 'LG' })
+
+  useEffect(() => {
+    getCachedUser().then((user) => {
+      if (user?.email?.toLowerCase().includes('luisa')) {
+        setIsLuisa(true)
+        setUserProfile({ name: 'Ft. Luisa', initial: 'LU' })
+      }
+    })
+  }, [])
+
+  const filteredNavItems = navItems.filter(item => {
+    if (isLuisa && (item.href === '/finanzas' || item.href === '/diezmo' || item.href === '/ajustes')) {
+      return false
+    }
+    return true
+  })
 
   // Scroll handler to hide/show mobile nav
   useEffect(() => {
@@ -65,8 +85,8 @@ export default function Sidebar() {
         </div>
 
         <div className="sidebar-logo mb-1 relative z-10">
-          <div className="w-14 h-14 bg-rose-600 rounded-[22px] flex items-center justify-center text-white shadow-2xl shadow-rose-200 animate-pulse border-4 border-white">
-            <Sparkles size={28} fill="currentColor" />
+          <div className="w-14 h-14 bg-rose-50 rounded-[22px] flex items-center justify-center shadow-2xl shadow-rose-200 border-4 border-white overflow-hidden">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
           </div>
           <div className="ml-1">
              <h1 className="font-display italic text-3xl text-rose-950 leading-tight">FisioGestión</h1>
@@ -78,7 +98,7 @@ export default function Sidebar() {
         </div>
 
         <nav className="nav-section space-y-3 relative z-10">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {filteredNavItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== '/' && pathname.startsWith(href))
             return (
               <Link key={href} href={href} className={`nav-item !rounded-[20px] !py-4 !px-5 transition-all duration-300 group ${active ? 'active !bg-rose-600 !text-white !shadow-xl !shadow-rose-300/40 translate-x-1' : '!text-rose-400 hover:!bg-white hover:!text-rose-600 hover:translate-x-1'}`}>
@@ -93,11 +113,11 @@ export default function Sidebar() {
 
         <div className="pt-10 border-t border-rose-100 mt-auto relative z-10 pb-4">
           <div className="p-4 bg-white/60 backdrop-blur-md rounded-[28px] border border-white flex items-center gap-4 shadow-sm group hover:shadow-md transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-rose-950 text-rose-100 flex items-center justify-center font-black text-xs shadow-lg group-hover:rotate-6 transition-transform">
-              LG
+            <div className="w-12 h-12 rounded-2xl bg-rose-950 text-rose-50 flex items-center justify-center font-black text-xs shadow-lg group-hover:rotate-6 transition-transform">
+              {userProfile.initial}
             </div>
             <div>
-              <div className="text-[11px] font-black text-rose-950 uppercase tracking-tighter">Dra. Liliana G.</div>
+              <div className="text-[11px] font-black text-rose-950 uppercase tracking-tighter">{userProfile.name}</div>
               <div className="flex items-center gap-1">
                  <div className="w-1 h-1 bg-rose-400 rounded-full"></div>
                  <div className="text-[9px] text-rose-400 font-bold uppercase tracking-widest">Fisioterapeuta</div>
@@ -121,7 +141,7 @@ export default function Sidebar() {
             ref={scrollRef}
             className="flex items-center overflow-x-auto scroll-smooth no-scrollbar snap-x snap-mandatory py-3 px-4 gap-1"
           >
-            {navItems.map(({ href, label, icon: Icon }) => {
+            {filteredNavItems.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== '/' && pathname.startsWith(href))
               return (
                 <Link 

@@ -11,17 +11,10 @@ import {
 
 // ─── Precios estáticos según número de sesiones ───────────────────────────────
 const PLANES_PRECIOS = [
-  { id: 'evaluacion', sesiones: 1, precio: 30000,  label: 'Evaluación' },
-  { id: 'descarga', sesiones: 1,  precio: 70000,   label: 'Descarga Muscular' },
-  { id: 'fisio-1',  sesiones: 1,  precio: 80000,   label: '1 sesión fisioterapia' },
-  { id: 'fisio-3',  sesiones: 3,  precio: 150000,  label: '3 sesiones' },
-  { id: 'fisio-4',  sesiones: 4,  precio: 200000,  label: '4 sesiones' },
-  { id: 'fisio-5',  sesiones: 5,  precio: 250000,  label: '5 sesiones' },
-  { id: 'fisio-10', sesiones: 10, precio: 500000,  label: '10 sesiones' },
-  { id: 'fisio-15', sesiones: 15, precio: 750000,  label: '15 sesiones' },
-  { id: 'fisio-20', sesiones: 20, precio: 1000000, label: '20 sesiones' },
-  { id: 'fisio-25', sesiones: 25, precio: 1250000, label: '25 sesiones' },
-  { id: 'fisio-30', sesiones: 30, precio: 1500000, label: '30 sesiones' },
+  { id: 'evaluacion', sesiones: 1, precio: 95000,  label: 'Valoración' },
+  { id: 'fisio-1',  sesiones: 1,  precio: 75000,   label: '1 sesión' },
+  { id: 'fisio-5',  sesiones: 5,  precio: 360000,  label: 'Paquete de 5 sesiones' },
+  { id: 'fisio-10', sesiones: 10, precio: 680000,  label: 'Paquete de 10 sesiones' },
 ]
 
 const HORARIOS_DISPONIBLES = [

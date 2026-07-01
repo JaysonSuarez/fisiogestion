@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { User, Phone, Stethoscope, DollarSign, Activity, FileText, ArrowLeft, Save, Loader2, Trash2, Calendar, CheckCircle2, Clock } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
@@ -25,36 +25,50 @@ export default function EditarPacientePage() {
   // Confirm Modal State
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // Load patient data
   useEffect(() => {
-    async function loadData() {
+    async function loadPatientData() {
       try {
         const { data: pData, error: pError } = await supabase
           .from('pacientes')
           .select('*')
           .eq('id', id)
           .single()
-
+        
         if (pError) throw pError
         setPatient(pData)
 
-        const { data: sData, error: sError } = await supabase
+        // Load sessions history
+        const { data: sData } = await supabase
           .from('sesiones')
           .select('*')
           .eq('paciente_id', id)
           .order('fecha', { ascending: false })
-
-        if (sError) throw sError
+        
         setSesiones(sData || [])
-
       } catch (err: any) {
-        console.error('Error al cargar datos:', err)
-        setError('No se pudo encontrar el paciente o su historial')
+        console.error(err)
+        setError(err.message || 'No se pudieron cargar los datos.')
       } finally {
         setLoading(false)
       }
     }
-    loadData()
+    loadPatientData()
   }, [id])
+
+  // Session deletion state
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+
+  const [isLuisa, setIsLuisa] = useState(false)
+
+  useEffect(() => {
+    async function checkUser() {
+      const user = await getCachedUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
+    }
+    checkUser()
+  }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -62,7 +76,7 @@ export default function EditarPacientePage() {
     setError(null)
 
     const formData = new FormData(e.currentTarget)
-    const updates = {
+    const updates: any = {
       nombre: formData.get('nombre') as string,
       telefono: formData.get('telefono') as string,
       diagnostico: formData.get('diagnostico') as string,
@@ -71,6 +85,11 @@ export default function EditarPacientePage() {
       edad: formData.get('edad') ? parseInt(formData.get('edad') as string) : null,
       sexo: formData.get('sexo') as string,
       documento_identidad: formData.get('documento_numero') ? `${formData.get('tipo_documento')} ${formData.get('documento_numero')}` : formData.get('documento_identidad_raw') as string,
+    }
+
+    const fisio = formData.get('fisioterapeuta')
+    if (fisio) {
+      updates.fisioterapeuta = fisio as string
     }
 
     try {
@@ -124,8 +143,7 @@ export default function EditarPacientePage() {
     }
   }
 
-  // Session deletion state
-  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+
 
   if (loading) {
     return (
@@ -269,6 +287,20 @@ export default function EditarPacientePage() {
                 </div>
               </div>
 
+              {!isLuisa && (
+                <div className="form-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block font-bold">Fisioterapeuta Asignada</label>
+                  <select 
+                    name="fisioterapeuta" 
+                    defaultValue={patient.fisioterapeuta || 'Liliana'}
+                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold appearance-none cursor-pointer"
+                  >
+                    <option value="Liliana">Liliana</option>
+                    <option value="Luisa">Luisa</option>
+                  </select>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Antecedentes Médicos</label>
                 <textarea 
@@ -317,7 +349,11 @@ export default function EditarPacientePage() {
                       </div>
                       <div>
                           <div className="text-xs font-black text-slate-900 uppercase tracking-tight">{new Date(s.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}</div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{formatCOP(s.valor)} — <span className={s.estado_pago === 'pagado' ? 'text-emerald-600' : 'text-rose-500'}>{s.estado_pago}</span></div>
+                          {!isLuisa ? (
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{formatCOP(s.valor)} — <span className={s.estado_pago === 'pagado' ? 'text-emerald-600' : 'text-rose-500'}>{s.estado_pago}</span></div>
+                          ) : (
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sesión Registrada</div>
+                          )}
                       </div>
                     </div>
                     <button 

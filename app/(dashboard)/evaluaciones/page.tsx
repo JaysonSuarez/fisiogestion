@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { FileText, Plus, Search, Loader2, ArrowRight, Trash2, Flower2 } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import { useRouter } from 'next/navigation'
@@ -21,17 +21,32 @@ export default function EvaluacionesIndexPage() {
 
   async function loadData() {
     try {
+      const user = await getCachedUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+
+      let query = supabase
+        .from('evaluaciones')
+        .select('*, pacientes(nombre)')
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      if (isLu) {
+        query = query.eq('fisioterapeuta', 'Luisa')
+      }
+
+      let pacQuery = supabase
+        .from('pacientes')
+        .select('id, nombre, documento_identidad')
+        .eq('estado', 'activo')
+        .order('nombre')
+
+      if (isLu) {
+        pacQuery = pacQuery.eq('fisioterapeuta', 'Luisa')
+      }
+
       const [evalRes, pacRes] = await Promise.all([
-        supabase
-          .from('evaluaciones')
-          .select('*, pacientes(nombre)')
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('pacientes')
-          .select('id, nombre, documento_identidad')
-          .eq('estado', 'activo')
-          .order('nombre')
+        query,
+        pacQuery
       ])
 
       if (evalRes.data) setEvaluaciones(evalRes.data)

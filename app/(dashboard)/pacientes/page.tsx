@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { OfflineSync } from '@/lib/offline-sync'
 import { 
   Search, 
@@ -24,6 +24,7 @@ export default function PacientesPage() {
   const [loading, setLoading] = useState(true)
   const [pacientes, setPacientes] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [isLuisa, setIsLuisa] = useState(false)
 
   async function loadPacientes() {
     // 1. Cargar desde caché (Offline First)
@@ -34,10 +35,20 @@ export default function PacientesPage() {
     }
 
     try {
-      const { data: pacientesRaw } = await supabase
+      const user = await getCachedUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
+
+      let query = supabase
         .from('pacientes')
         .select('*, sesiones(valor, estado_pago)')
         .order('nombre')
+
+      if (isLu) {
+        query = query.eq('fisioterapeuta', 'Luisa')
+      }
+
+      const { data: pacientesRaw } = await query
 
       if (pacientesRaw) {
         const processed = pacientesRaw.map(p => {
@@ -59,6 +70,19 @@ export default function PacientesPage() {
       console.error('Error cargando pacientes:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleAssignTherapist = async (id: string, fisio: string) => {
+    try {
+      const { error } = await supabase
+        .from('pacientes')
+        .update({ fisioterapeuta: fisio })
+        .eq('id', id)
+      if (error) throw error
+      setPacientes(prev => prev.map(p => p.id === id ? { ...p, fisioterapeuta: fisio } : p))
+    } catch (e) {
+      console.error('Error al asignar terapeuta:', e)
     }
   }
 
@@ -114,8 +138,21 @@ export default function PacientesPage() {
                   <div className="font-black text-rose-950 uppercase tracking-tight">{p.nombre}</div>
                   <div className="text-[10px] text-rose-300 font-bold uppercase tracking-widest">{p.telefono || 'Sin teléfono'}</div>
                 </div>
-                <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.estado === 'activo' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-400'}`}>
-                  {p.estado === 'activo' ? 'Activo' : 'Pausa'}
+                <div className="flex flex-col items-end gap-1.5">
+                  <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.estado === 'activo' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-400'}`}>
+                    {p.estado === 'activo' ? 'Activo' : 'Pausa'}
+                  </div>
+                  {!isLuisa && (
+                    <select 
+                      value={p.fisioterapeuta || 'Liliana'}
+                      onChange={(e) => handleAssignTherapist(p.id, e.target.value)}
+                      className="text-[8px] font-black rounded-lg border border-rose-100 px-1.5 py-0.5 bg-white text-rose-950 uppercase tracking-wider outline-none shadow-sm cursor-pointer"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <option value="Liliana">Liliana</option>
+                      <option value="Luisa">Luisa</option>
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-rose-50/50">
@@ -126,12 +163,14 @@ export default function PacientesPage() {
                     {p.numSesiones}
                   </div>
                 </div>
-                <div>
-                   <div className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-1">Deuda</div>
-                  <div className={`text-sm font-black ${p.deuda > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
-                    {p.deuda > 0 ? formatCOP(p.deuda) : 'Saldado'}
+                {!isLuisa && (
+                  <div>
+                     <div className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-1">Deuda</div>
+                    <div className={`text-sm font-black ${p.deuda > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
+                      {p.deuda > 0 ? formatCOP(p.deuda) : 'Saldado'}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </Link>
           ))}
@@ -150,7 +189,8 @@ export default function PacientesPage() {
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest">Paciente</th>
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest">Diagnóstico</th>
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-center">Sesiones</th>
-                <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-right">Saldo</th>
+                {!isLuisa && <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-right">Saldo</th>}
+                {!isLuisa && <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-center">Fisioterapeuta</th>}
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-center">Estado</th>
                 <th className="px-8 py-5"></th>
               </tr>
@@ -173,14 +213,28 @@ export default function PacientesPage() {
                   <td className="px-8 py-6 text-center">
                     <div className="text-sm font-black text-rose-950">{p.numSesiones}</div>
                   </td>
-                  <td className="px-8 py-6 text-right">
-                    <div className={`text-sm font-black ${p.deuda > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
-                      {p.deuda > 0 ? formatCOP(p.deuda) : formatCOP(p.pagado)}
-                    </div>
-                    <div className="text-[8px] font-black text-rose-300 uppercase tracking-widest">
-                      {p.deuda > 0 ? 'PENDIENTE' : 'PAGADO'}
-                    </div>
-                  </td>
+                  {!isLuisa && (
+                    <td className="px-8 py-6 text-right">
+                      <div className={`text-sm font-black ${p.deuda > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
+                        {p.deuda > 0 ? formatCOP(p.deuda) : formatCOP(p.pagado)}
+                      </div>
+                      <div className="text-[8px] font-black text-rose-300 uppercase tracking-widest">
+                        {p.deuda > 0 ? 'PENDIENTE' : 'PAGADO'}
+                      </div>
+                    </td>
+                  )}
+                  {!isLuisa && (
+                    <td className="px-8 py-6 text-center">
+                      <select 
+                        value={p.fisioterapeuta || 'Liliana'}
+                        onChange={(e) => handleAssignTherapist(p.id, e.target.value)}
+                        className="text-[9px] font-black rounded-lg border border-rose-100 px-2 py-1 bg-white text-rose-950 uppercase tracking-widest outline-none shadow-sm cursor-pointer"
+                      >
+                        <option value="Liliana">Liliana</option>
+                        <option value="Luisa">Luisa</option>
+                      </select>
+                    </td>
+                  )}
                   <td className="px-8 py-6 text-center">
                     <div className={`px-4 py-1.5 rounded-full inline-block text-[9px] font-black uppercase tracking-widest ${p.estado === 'activo' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-400'}`}>
                       {p.estado === 'activo' ? 'Activo' : 'Pausa'}

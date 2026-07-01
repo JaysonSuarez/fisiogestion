@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { ClipboardPlus, ArrowLeft, User, Calendar, Package, DollarSign, Wallet, CheckCircle, FileText, Info, Loader2, Clock, Check, AlertCircle, Sparkles, Flower2, Heart } from 'lucide-react'
 import { addDays, isSunday, getDay } from 'date-fns'
 import NotificationModal from '@/components/ui/NotificationModal'
@@ -35,7 +35,8 @@ export default function NuevaSesionPage({
   
   const [pacienteId, setPacienteId] = useState(resolvedParams.paciente ?? '')
   const [cantidadSesiones, setCantidadSesiones] = useState<number>(1)
-  const [valorPorSesion, setValorPorSesion] = useState<number>(80000)
+  const [valorPorSesion, setValorPorSesion] = useState<number>(95000)
+  const [tipoPlan, setTipoPlan] = useState('valoracion')
 
   // Notification State
   const [notification, setNotification] = useState<{isOpen: boolean, type: 'success' | 'error' | 'info', title: string, message: string}>({
@@ -58,7 +59,15 @@ export default function NuevaSesionPage({
   useEffect(() => {
     async function loadPacientes() {
       try {
-        const { data, error } = await supabase.from('pacientes').select('id, nombre').order('nombre')
+        const user = await getCachedUser()
+        const isLu = user?.email?.toLowerCase().includes('luisa')
+
+        let query = supabase.from('pacientes').select('id, nombre, fisioterapeuta').order('nombre')
+        if (isLu) {
+          query = query.eq('fisioterapeuta', 'Luisa')
+        }
+
+        const { data, error } = await query
         if (error) throw error
         setPacientes(data || [])
       } catch (err) {
@@ -71,22 +80,18 @@ export default function NuevaSesionPage({
   }, [])
 
   const opcionesSesiones = [
-    { value: 1, label: '1 Sesión Fisioterapia', type: 'fisioterapia' },
-    { value: 1, label: '1 Descarga Muscular', type: 'descarga' },
+    { value: 1, label: 'Valoración', type: 'valoracion' },
+    { value: 1, label: '1 Sesión', type: 'fisioterapia' },
     { value: 5, label: '5 Sesiones', type: 'fisioterapia' },
     { value: 10, label: '10 Sesiones', type: 'fisioterapia' },
-    { value: 15, label: '15 Sesiones', type: 'fisioterapia' },
-    { value: 20, label: '20 Sesiones', type: 'fisioterapia' },
-    { value: 25, label: '25 Sesiones', type: 'fisioterapia' },
-    { value: 30, label: '30 Sesiones', type: 'fisioterapia' },
   ]
 
-  const [tipoPlan, setTipoPlan] = useState('fisioterapia')
-
   const getMinPrice = (cantidad: number, type: string) => {
-    if (type === 'descarga') return 70000
-    if (cantidad === 1) return 80000
-    return 50000 
+    if (type === 'valoracion') return 95000
+    if (cantidad === 1) return 75000
+    if (cantidad === 5) return 72000 // 360,000 total
+    if (cantidad === 10) return 68000 // 680,000 total
+    return 75000 
   }
 
   const handleCambioSesiones = (val: number, type: string) => {
@@ -137,6 +142,13 @@ export default function NuevaSesionPage({
     const nota_clinica = formData.get('nota_clinica') as string
 
     try {      
+      const selectedPatient = pacientes.find(p => p.id === pacienteId)
+      const patientFisio = selectedPatient?.fisioterapeuta || 'Liliana'
+      
+      const user = await getCachedUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      const activeFisio = isLu ? 'Luisa' : patientFisio
+
       let currentCitaDate = new Date(fechaInicioStr + 'T12:00:00')
       let abonoRestante = hizoAbono ? Number(montoAbono) : 0
 
@@ -148,7 +160,7 @@ export default function NuevaSesionPage({
         monto_pagado: hizoAbono ? abonoRestante : 0,
         metodo_pago: hizoAbono ? metodoPago : null,
         estado_pago: (hizoAbono && abonoRestante >= valorTotal) ? 'pagado' : 'pendiente',
-        nota_clinica: `[Plan de ${tipoPlan === 'descarga' ? 'Descarga Muscular' : cantidadSesiones + ' sesiones'}] ${nota_clinica}`,
+        nota_clinica: `[Plan de ${tipoPlan === 'valoracion' ? 'Valoración' : cantidadSesiones + ' sesiones'}] ${nota_clinica}`,
         duracion_minutos: 60 * cantidadSesiones
       }]).select('id').single()
 
@@ -181,6 +193,7 @@ export default function NuevaSesionPage({
           hora_inicio: horaCita,
           duracion_minutos: 60,
           estado: 'pendiente', 
+          fisioterapeuta: activeFisio,
           notas: `Sesión ${i+1}/${cantidadSesiones}. ${nota_clinica}`
         })
 

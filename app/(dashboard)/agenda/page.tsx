@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { 
@@ -25,6 +25,7 @@ import { format12h, getIniciales } from '@/lib/utils'
 export default function AgendaPage() {
   const [loading, setLoading] = useState(true)
   const [citas, setCitas] = useState<any[]>([])
+  const [isLuisa, setIsLuisa] = useState(false)
   
   // Para navegación móvil (ver un día a la vez si es necesario o scroll mejorado)
   const now = new Date()
@@ -69,12 +70,22 @@ export default function AgendaPage() {
     }
 
     try {
-      const { data } = await supabase
+      const user = await getCachedUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
+
+      let query = supabase
         .from('citas')
         .select('*, pacientes(nombre)')
         .gte('fecha', format(startOfCurrentWeek, 'yyyy-MM-dd'))
         .lte('fecha', format(addDays(startOfCurrentWeek, 4), 'yyyy-MM-dd'))
         .order('hora_inicio')
+
+      if (isLu) {
+        query = query.eq('fisioterapeuta', 'Luisa')
+      }
+
+      const { data } = await query
       
       if (data) {
         setCitas(data);
@@ -204,6 +215,16 @@ export default function AgendaPage() {
     }
   }
 
+  const handleAssignTherapist = async (id: string, fisio: string) => {
+    try {
+      const { error } = await supabase.from('citas').update({ fisioterapeuta: fisio }).eq('id', id)
+      if (error) throw error
+      setCitas(prev => prev.map(c => c.id === id ? { ...c, fisioterapeuta: fisio } : c))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const HORAS = ['07:00','08:00','09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00']
 
   if (loading && citas.length === 0) {
@@ -222,7 +243,7 @@ export default function AgendaPage() {
             <CalendarIcon className="text-rose-400" size={36} />
             Calendario
           </h2>
-          <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">Agenda Semanal Liliana</p>
+          <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">Agenda Semanal {isLuisa ? 'Luisa' : 'Liliana'}</p>
         </div>
         
         <div className="flex items-center gap-3 bg-white p-2 rounded-[24px] shadow-lg shadow-rose-100/20 border border-rose-50">
@@ -302,7 +323,10 @@ export default function AgendaPage() {
                                 <span className={`text-[5px] sm:text-[7px] font-black uppercase tracking-widest ${isCompleted ? 'text-lime-400' : 'text-rose-500'}`}>{sessionInfo}</span>
                               </div>
                               <div className={`text-[7px] sm:text-[10px] font-black truncate tracking-tight leading-none ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</div>
-                              <div className={`text-[6px] sm:text-[8px] font-bold tracking-widest uppercase mt-0.5 ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>{format12h(cita.hora_inicio)} · {cita.duracion_minutos}m</div>
+                              <div className={`text-[6px] sm:text-[8px] font-bold tracking-widest uppercase mt-0.5 ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>
+                                {format12h(cita.hora_inicio)} · {cita.duracion_minutos}m
+                                {cita.fisioterapeuta && !isLuisa && ` · ${cita.fisioterapeuta}`}
+                              </div>
                             </div>
                           </div>
                         )
@@ -360,15 +384,28 @@ export default function AgendaPage() {
                         </div>
                       </div>
                     </div>
-                    <span className={`badge !text-[8px] !font-black !px-3 !py-1.5 !rounded-full !uppercase ${
-                      cita.estado === 'completada' || cita.estado === 'completado' 
-                        ? '!bg-lime-50 !text-lime-600 border border-lime-100' 
-                        : cita.estado === 'confirmada' || cita.estado === 'confirmado'
-                          ? '!bg-emerald-50 !text-emerald-500' 
-                          : '!bg-rose-100 !text-rose-600'
-                    }`}>
-                      {cita.estado}
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`badge !text-[8px] !font-black !px-3 !py-1.5 !rounded-full !uppercase ${
+                        cita.estado === 'completada' || cita.estado === 'completado' 
+                          ? '!bg-lime-50 !text-lime-600 border border-lime-100' 
+                          : cita.estado === 'confirmada' || cita.estado === 'confirmado'
+                            ? '!bg-emerald-50 !text-emerald-500' 
+                            : '!bg-rose-100 !text-rose-600'
+                      }`}>
+                        {cita.estado}
+                      </span>
+                      {!isLuisa && (
+                        <select 
+                           value={cita.fisioterapeuta || 'Liliana'}
+                           onChange={(e) => handleAssignTherapist(cita.id, e.target.value)}
+                           className="text-[9px] font-black rounded-lg border border-rose-100 px-2 py-1 bg-white text-rose-950 uppercase tracking-widest outline-none shadow-sm cursor-pointer"
+                           onClick={(e) => e.stopPropagation()}
+                        >
+                           <option value="Liliana">Liliana</option>
+                           <option value="Luisa">Luisa</option>
+                        </select>
+                      )}
+                    </div>
                   </div>
                 )
               })

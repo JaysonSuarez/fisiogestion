@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
@@ -32,7 +32,7 @@ import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 import NotificationModal from '@/components/ui/NotificationModal'
 import PushManager from '@/components/push/PushManager'
 import { OfflineSync } from '@/lib/offline-sync'
-import { formatCOP, format12h, getIniciales } from '@/lib/utils'
+import { formatCOP, format12h, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -43,8 +43,12 @@ export default function DashboardPage() {
     ingresoTotal: 0,
     diezmoTotal: 0,
     deudores: [],
-    solicitudesCount: 0
+    solicitudesCount: 0,
+    horasClinicas: 0
   })
+
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr())
+  const [isLuisa, setIsLuisa] = useState(false)
 
   // Control de recordatorios
   const [activeReminder, setActiveReminder] = useState<any>(null)
@@ -67,23 +71,57 @@ export default function DashboardPage() {
     const todayStr = format(now, 'yyyy-MM-dd')
 
     // 1. Cargar desde caché (Offline First)
-    const cachedData = OfflineSync.getFromCache('dashboard');
+    const cachedData = OfflineSync.getFromCache(`dashboard-${selectedMonth}`);
     if (cachedData) {
       setData(cachedData);
       setLoading(false);
     }
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
+
+      const [year, month] = selectedMonth.split('-')
+      const startDate = `${year}-${month}-01`
+      const endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0]
+
+      let pacientesActivos = 0
+      
+      if (isLu) {
+        const { count } = await supabase
+          .from('pacientes')
+          .select('*', { count: 'exact', head: true })
+          .eq('estado', 'activo')
+          .eq('fisioterapeuta', 'Luisa')
+        pacientesActivos = count || 0
+      } else {
+        const { count } = await supabase
+          .from('pacientes')
+          .select('*', { count: 'exact', head: true })
+          .eq('estado', 'activo')
+        pacientesActivos = count || 0
+      }
+
+      let citasHoyQuery = supabase.from('citas').select('*, pacientes(nombre, telefono)').eq('fecha', todayStr).neq('estado', 'cancelada')
+      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, diezmo_entregado, pacientes(nombre, id)').gte('fecha', startDate).lte('fecha', endDate)
+      let citasMesQuery = supabase.from('citas').select('duracion_minutos').eq('estado', 'completada').gte('fecha', startDate).lte('fecha', endDate)
+      
+      if (isLu) {
+        citasHoyQuery = citasHoyQuery.eq('fisioterapeuta', 'Luisa')
+        citasMesQuery = citasMesQuery.eq('fisioterapeuta', 'Luisa')
+      }
+
       const [
-        { count: pacientesActivos },
         { data: citasHoyRaw },
         { data: todasSesiones },
-        { count: solicitudesCount }
+        { count: solicitudesCount },
+        { data: citasMes }
       ] = await Promise.all([
-        supabase.from('pacientes').select('*', { count: 'exact', head: true }).eq('estado', 'activo'),
-        supabase.from('citas').select('*, pacientes(nombre, telefono)').eq('fecha', todayStr).neq('estado', 'cancelada'),
-        supabase.from('sesiones').select('valor, monto_pagado, diezmo_entregado, pacientes(nombre, id)'),
-        supabase.from('solicitudes_cita').select('*', { count: 'exact', head: true }).eq('estado', 'pendiente')
+        citasHoyQuery,
+        sesionesQuery,
+        supabase.from('solicitudes_cita').select('*', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+        citasMesQuery
       ]);
 
       const porCobrar = todasSesiones?.reduce((acc, s) => acc + (s.valor - (s.monto_pagado || 0)), 0) || 0
@@ -101,6 +139,8 @@ export default function DashboardPage() {
       })
       const deudores = Object.values(deudoresMap).sort((a, b) => b.deuda - a.deuda).slice(0, 3)
 
+      const horasClinicas = (citasMes?.reduce((acc, c) => acc + (c.duracion_minutos || 0), 0) || 0) / 60
+
       const newData = {
         pacientesActivos: pacientesActivos || 0,
         citasHoy: citasHoyRaw || [],
@@ -108,11 +148,12 @@ export default function DashboardPage() {
         ingresoTotal: ingresoGlobal,
         diezmoTotal: Math.round(ingresoDiezmoActual * 0.1),
         deudores,
-        solicitudesCount: solicitudesCount || 0
+        solicitudesCount: solicitudesCount || 0,
+        horasClinicas: Math.round(horasClinicas * 10) / 10
       };
 
       setData(newData);
-      OfflineSync.saveToCache('dashboard', newData);
+      OfflineSync.saveToCache(`dashboard-${selectedMonth}`, newData);
     } catch (e) {
       console.error('Error loading dashboard network data', e);
     } finally {
@@ -133,7 +174,7 @@ export default function DashboardPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [selectedMonth])
 
 
   // Manejar interacciones de notificaciones PUSH
@@ -341,10 +382,10 @@ export default function DashboardPage() {
         <div className="flex flex-row items-center justify-between w-full gap-4">
           <div className="flex-1">
             <div className="flex items-center justify-between md:justify-start gap-4">
-              <h2 className="font-display italic text-4xl md:text-6xl text-rose-950 flex items-center gap-3">
+              <h2 className="font-display italic text-5xl md:text-6xl text-rose-950 flex items-center gap-3">
                 <Sparkles className="text-rose-400 animate-pulse hidden md:block" size={40} />
                 <Sparkles className="text-rose-400 animate-pulse md:hidden" size={28} />
-                Hola, Ft. Liliana
+                Hola, Ft. {isLuisa ? 'Luisa' : 'Liliana'}
               </h2>
               
               <div className="flex items-center gap-2">
@@ -366,6 +407,18 @@ export default function DashboardPage() {
                 {format(now, "EEEE d 'de' MMMM", { locale: es })}
               </p>
               <Flower size={14} className="text-rose-200" />
+            </div>
+            
+            <div className="mt-4 flex items-center gap-2 max-w-xs">
+              <select 
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-full bg-white border border-rose-100 text-rose-950 font-black rounded-[20px] px-4 py-2 shadow-sm uppercase tracking-widest text-xs outline-none focus:ring-2 focus:ring-rose-200"
+              >
+                {getMesesDisponibles().map(m => (
+                  <option key={m} value={m}>{formatMes(m)}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -397,29 +450,44 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card metric-card border-none bg-white shadow-xl shadow-rose-100/30 relative overflow-hidden group border border-rose-50">
-          <div className="absolute -right-4 -top-4 text-rose-100/20 group-hover:scale-110 transition-transform">
-            <TrendingUp size={100} />
-          </div>
-          <div className="relative z-10">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl w-fit mb-6 shadow-sm"><TrendingUp size={24} /></div>
-            <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Total recaudado</span>
-            <div className="text-2xl md:text-4xl font-black text-rose-950 tracking-tighter truncate" title={formatCOP(data.ingresoTotal)}>
-              {formatCOP(data.ingresoTotal)}
+        {!isLuisa ? (
+          <div className="card metric-card border-none bg-white shadow-xl shadow-rose-100/30 relative overflow-hidden group border border-rose-50">
+            <div className="absolute -right-4 -top-4 text-rose-100/20 group-hover:scale-110 transition-transform">
+              <TrendingUp size={100} />
+            </div>
+            <div className="relative z-10">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl w-fit mb-6 shadow-sm"><TrendingUp size={24} /></div>
+              <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Total recaudado</span>
+              <div className="text-2xl md:text-4xl font-black text-rose-950 tracking-tighter truncate" title={formatCOP(data.ingresoTotal)}>
+                {formatCOP(data.ingresoTotal)}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="card metric-card border-none bg-white shadow-xl shadow-rose-100/30 relative overflow-hidden group border border-rose-50">
+            <div className="absolute -right-4 -top-4 text-rose-100/20 group-hover:scale-110 transition-transform">
+              <Activity size={100} />
+            </div>
+            <div className="relative z-10">
+              <div className="p-3 bg-sky-50 text-sky-600 rounded-2xl w-fit mb-6 shadow-sm"><Clock size={24} /></div>
+              <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Horas Clínicas</span>
+              <div className="text-3xl md:text-4xl font-black text-rose-950 tracking-tighter">{data.horasClinicas}h</div>
+            </div>
+          </div>
+        )}
 
-        <div className="card metric-card border-none bg-rose-50/50 shadow-xl shadow-rose-100/10 relative overflow-hidden group border border-rose-100/50">
-          <div className="absolute -right-4 -top-4 text-rose-200/20 group-hover:scale-110 transition-transform">
-            <Activity size={100} />
+        {!isLuisa && (
+          <div className="card metric-card border-none bg-rose-50/50 shadow-xl shadow-rose-100/10 relative overflow-hidden group border border-rose-100/50">
+            <div className="absolute -right-4 -top-4 text-rose-200/20 group-hover:scale-110 transition-transform">
+              <Activity size={100} />
+            </div>
+            <div className="relative z-10">
+              <div className="p-3 bg-white text-rose-500 rounded-2xl w-fit mb-6 shadow-sm"><Activity size={24} /></div>
+              <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Solicitudes</span>
+              <div className="text-3xl md:text-4xl font-black text-rose-950 tracking-tighter">{data.solicitudesCount}</div>
+            </div>
           </div>
-          <div className="relative z-10">
-            <div className="p-3 bg-white text-rose-500 rounded-2xl w-fit mb-6 shadow-sm"><Activity size={24} /></div>
-            <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Solicitudes</span>
-            <div className="text-3xl md:text-4xl font-black text-rose-950 tracking-tighter">{data.solicitudesCount}</div>
-          </div>
-        </div>
+        )}
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mt-12">
@@ -484,78 +552,80 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-10">
-          <div className="card bg-white border-2 border-rose-50 shadow-xl shadow-rose-100/20 p-8 relative overflow-hidden">
-            <div className="absolute -right-8 -bottom-8 text-rose-50/30">
-              <Flower size={120} />
-            </div>
-            <div className="relative z-10">
-              <div className="flex-between mb-8 pb-4 border-b border-rose-50">
-                <h3 className="text-rose-950 font-black uppercase text-xs tracking-[0.2em] flex items-center gap-2">
-                  <Heart size={14} className="text-rose-400" /> Cartera Liliana
-                </h3>
-                <Link href="/finanzas" className="text-[9px] font-black text-white bg-rose-950 px-3 py-1 rounded-full uppercase tracking-widest hover:bg-rose-900 transition-colors">Cobrar</Link>
+        {!isLuisa && (
+          <div className="flex flex-col gap-10">
+            <div className="card bg-white border-2 border-rose-50 shadow-xl shadow-rose-100/20 p-8 relative overflow-hidden">
+              <div className="absolute -right-8 -bottom-8 text-rose-50/30">
+                <Flower size={120} />
               </div>
-              <div className="space-y-4">
-                {data.deudores.map((p: any, idx: number) => (
-                  <div key={idx} className="flex-between p-5 bg-rose-50/30 rounded-[28px] border border-rose-100/50 hover:bg-rose-50 transition-colors">
-                    <span className="text-sm font-black text-rose-950 tracking-tight uppercase">{p.nombre}</span>
-                    <span className="text-lg font-black text-rose-600 tracking-tighter">
-                      {formatCOP(p.deuda)}
-                    </span>
-                  </div>
-                ))}
-                {data.deudores.length === 0 && (
-                  <div className="text-center py-6">
-                    <Sparkles className="mx-auto mb-2 text-rose-300" size={24} />
-                    <p className="text-[10px] text-rose-300 font-black uppercase tracking-[0.2em] italic">¡Todo brilla y está al día!</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="card bg-gradient-to-br from-white to-rose-50 border-2 border-rose-100 p-10 shadow-xl shadow-rose-100/20 overflow-hidden relative group rounded-[40px]">
-            <div className="absolute -right-4 -bottom-4 w-48 h-48 bg-rose-200/20 rounded-full blur-[80px] group-hover:scale-125 transition-transform duration-1000"></div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-rose-100/30 -z-0">
-               <Heart size={200} fill="currentColor" />
-            </div>
-            
-            <div className="flex-between mb-10 relative z-10">
-              <div className="flex items-center gap-3">
-                 <div className="p-3 bg-white rounded-2xl text-rose-500 shadow-sm border border-rose-100">
-                  <Heart size={22} fill="currentColor" />
+              <div className="relative z-10">
+                <div className="flex-between mb-8 pb-4 border-b border-rose-50">
+                  <h3 className="text-rose-950 font-black uppercase text-xs tracking-[0.2em] flex items-center gap-2">
+                    <Heart size={14} className="text-rose-400" /> Cartera Liliana
+                  </h3>
+                  <Link href="/finanzas" className="text-[9px] font-black text-white bg-rose-950 px-3 py-1 rounded-full uppercase tracking-widest hover:bg-rose-900 transition-colors">Cobrar</Link>
                 </div>
-                <h3 className="text-rose-950 font-black uppercase tracking-[0.2em] text-[10px]">Diezmo Especial</h3>
-              </div>
-            </div>
-            
-            <div className="space-y-8 relative z-10">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <div className="text-rose-500 text-[9px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
-                        Ofrenda (10%) <Sparkles size={10} />
-                      </div>
-                      <div className="text-3xl md:text-5xl font-black text-rose-950 tracking-tighter mb-1">{formatCOP(data.diezmoTotal)}</div>
-                      <div className="text-[8px] text-rose-400 font-bold uppercase tracking-widest italic">Sincronizado con tus bendiciones</div>
+                <div className="space-y-4">
+                  {data.deudores.map((p: any, idx: number) => (
+                    <div key={idx} className="flex-between p-5 bg-rose-50/30 rounded-[28px] border border-rose-100/50 hover:bg-rose-50 transition-colors">
+                      <span className="text-sm font-black text-rose-950 tracking-tight uppercase">{p.nombre}</span>
+                      <span className="text-lg font-black text-rose-600 tracking-tighter">
+                        {formatCOP(p.deuda)}
+                      </span>
                     </div>
-                  </div>
+                  ))}
+                  {data.deudores.length === 0 && (
+                    <div className="text-center py-6">
+                      <Sparkles className="mx-auto mb-2 text-rose-300" size={24} />
+                      <p className="text-[10px] text-rose-300 font-black uppercase tracking-[0.2em] italic">¡Todo brilla y está al día!</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
-              <div className="pt-6 border-t border-rose-200/50 space-y-4">
-                <div className="flex justify-between text-[10px] font-black text-rose-500 mb-1 uppercase tracking-[0.2em]">
-                  <span>RECAUDO TOTAL</span>
-                  <span className="text-rose-950 font-black">{formatCOP(data.ingresoTotal)}</span>
+            <div className="card bg-gradient-to-br from-white to-rose-50 border-2 border-rose-100 p-10 shadow-xl shadow-rose-100/20 overflow-hidden relative group rounded-[40px]">
+              <div className="absolute -right-4 -bottom-4 w-48 h-48 bg-rose-200/20 rounded-full blur-[80px] group-hover:scale-125 transition-transform duration-1000"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-rose-100/30 -z-0">
+                 <Heart size={200} fill="currentColor" />
+              </div>
+              
+              <div className="flex-between mb-10 relative z-10">
+                <div className="flex items-center gap-3">
+                   <div className="p-3 bg-white rounded-2xl text-rose-500 shadow-sm border border-rose-100">
+                    <Heart size={22} fill="currentColor" />
+                  </div>
+                  <h3 className="text-rose-950 font-black uppercase tracking-[0.2em] text-[10px]">Diezmo Especial</h3>
                 </div>
-                <div className="h-3 bg-white rounded-full overflow-hidden border border-rose-100">
-                  <div className="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-full w-full"></div>
-                </div>
-                <div className="flex justify-center">
-                   <Flower size={16} className="text-rose-200" />
+              </div>
+              
+              <div className="space-y-8 relative z-10">
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <div className="text-rose-500 text-[9px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
+                          Ofrenda (10%) <Sparkles size={10} />
+                        </div>
+                        <div className="text-3xl md:text-5xl font-black text-rose-950 tracking-tighter mb-1">{formatCOP(data.diezmoTotal)}</div>
+                        <div className="text-[8px] text-rose-400 font-bold uppercase tracking-widest italic">Sincronizado con tus bendiciones</div>
+                      </div>
+                    </div>
+
+                <div className="pt-6 border-t border-rose-200/50 space-y-4">
+                  <div className="flex justify-between text-[10px] font-black text-rose-500 mb-1 uppercase tracking-[0.2em]">
+                    <span>RECAUDO TOTAL</span>
+                    <span className="text-rose-950 font-black">{formatCOP(data.ingresoTotal)}</span>
+                  </div>
+                  <div className="h-3 bg-white rounded-full overflow-hidden border border-rose-100">
+                    <div className="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-full w-full"></div>
+                  </div>
+                  <div className="flex justify-center">
+                     <Flower size={16} className="text-rose-200" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── MODAL DE RECORDATORIO AUTOMÁTICO ── */}

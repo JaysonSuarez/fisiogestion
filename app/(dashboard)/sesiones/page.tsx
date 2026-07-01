@@ -2,17 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { ClipboardPlus, Activity, CheckCircle, Clock, AlertCircle, Loader2, Sparkles, Edit3, Plus, Minus, X, Save, Trash2, Flower2 } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
-import { formatCOP, getIniciales } from '@/lib/utils'
+import { formatCOP, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr } from '@/lib/utils'
 
 export default function SesionesPage() {
   const [loading, setLoading] = useState(true)
   const [sesiones, setSesiones] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr())
+  const [isLuisa, setIsLuisa] = useState(false)
   
   // Edit State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -32,11 +34,26 @@ export default function SesionesPage() {
   async function loadSesiones() {
     try {
       setLoading(true)
+      const user = await getCachedUser()
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
+
+      const [year, month] = selectedMonth.split('-')
+      const startDate = `${year}-${month}-01`
+      const endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0]
+
       const { data } = await supabase
         .from('sesiones')
-        .select('*, pacientes(nombre, valor_sesion), citas(id, estado, fecha, hora_inicio, notas)')
+        .select('*, pacientes(nombre, valor_sesion, fisioterapeuta), citas(id, estado, fecha, hora_inicio, notas, fisioterapeuta)')
+        .gte('fecha', startDate)
+        .lte('fecha', endDate)
         .order('fecha', { ascending: false })
-      setSesiones(data || [])
+        
+      let filteredData = data || []
+      if (isLu) {
+        filteredData = filteredData.filter((s: any) => s.pacientes?.fisioterapeuta === 'Luisa')
+      }
+      setSesiones(filteredData)
     } finally {
       setLoading(false)
     }
@@ -54,7 +71,7 @@ export default function SesionesPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [selectedMonth])
 
   const totalHoras = sesiones.reduce((a, s) => a + (s.duracion_minutos || 0), 0) / 60
   
@@ -115,6 +132,10 @@ export default function SesionesPage() {
     setLocalCitas(localCitas.map(c => c.id === id ? { ...c, fecha: newDate } : c))
   }
 
+  const handleUpdateCitaFisioterapeuta = (id: string, fisio: string) => {
+    setLocalCitas(localCitas.map(c => c.id === id ? { ...c, fisioterapeuta: fisio } : c))
+  }
+
   const handleCompleteLocalSession = (id: string) => {
     setLocalCitas(localCitas.map(c => c.id === id ? { ...c, estado: 'completada' } : c))
   }
@@ -140,7 +161,11 @@ export default function SesionesPage() {
 
       const toUpdate = localCitas.filter(c => !c.isNew)
       for (const c of toUpdate) {
-        await supabase.from('citas').update({ fecha: c.fecha, estado: c.estado }).eq('id', c.id)
+        await supabase.from('citas').update({ 
+          fecha: c.fecha, 
+          estado: c.estado,
+          fisioterapeuta: c.fisioterapeuta || 'Liliana'
+        }).eq('id', c.id)
       }
 
       const toInsert = localCitas.filter(c => c.isNew).map(c => ({
@@ -149,7 +174,8 @@ export default function SesionesPage() {
         fecha: c.fecha,
         hora_inicio: c.hora_inicio,
         duracion_minutos: 60,
-        estado: 'pendiente'
+        estado: 'pendiente',
+        fisioterapeuta: c.fisioterapeuta || 'Liliana'
       }))
 
       if (toInsert.length > 0) {
@@ -199,6 +225,18 @@ export default function SesionesPage() {
             Planes
           </h2>
           <p className="text-rose-400 font-bold text-xs uppercase tracking-widest italic">Tratamientos y Gestión de Sesiones</p>
+          
+          <div className="mt-4 flex items-center gap-2 max-w-xs">
+            <select 
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-full bg-white border border-rose-100 text-rose-950 font-black rounded-[20px] px-4 py-2 shadow-sm uppercase tracking-widest text-xs outline-none focus:ring-2 focus:ring-rose-200"
+            >
+              {getMesesDisponibles().map(m => (
+                <option key={m} value={m}>{formatMes(m)}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
           <button 
@@ -268,7 +306,11 @@ export default function SesionesPage() {
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded-full">{s.fecha}</span>
                        <span className="text-rose-100">/</span>
-                       <span className="text-sm font-black text-rose-900">{formatCOP(s.valor)}</span>
+                       {!isLuisa ? (
+                         <span className="text-sm font-black text-rose-900">{formatCOP(s.valor)}</span>
+                       ) : (
+                         <span className="text-sm font-black text-rose-400 uppercase tracking-widest text-[10px]">Plan Activo</span>
+                       )}
                     </div>
                   </div>
                 </div>
@@ -285,7 +327,7 @@ export default function SesionesPage() {
                     >
                       Editar
                     </button>
-                    {s.estado_pago === 'pendiente' && (
+                    {!isLuisa && s.estado_pago === 'pendiente' && (
                       <Link 
                         href={`/finanzas?paciente=${s.paciente_id}`}
                         className="text-[10px] font-black text-white bg-rose-950 hover:bg-rose-900 px-5 py-2 rounded-xl transition-all uppercase tracking-[0.2em] shadow-lg shadow-rose-950/20"
@@ -355,13 +397,21 @@ export default function SesionesPage() {
                             <div className="w-10 h-10 rounded-xl bg-white text-rose-500 flex items-center justify-center font-black text-xs shadow-sm">
                                {idx + 1}
                             </div>
-                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                <input 
                                  type="date"
                                  value={cita.fecha}
                                  onChange={(e) => handleUpdateCitaDate(cita.id, e.target.value)}
-                                 className="bg-white px-4 py-2 rounded-xl text-xs font-black text-rose-950 border border-rose-100 outline-none focus:border-rose-300"
+                                 className="bg-white px-3 py-2 rounded-xl text-xs font-black text-rose-950 border border-rose-100 outline-none focus:border-rose-300 w-full"
                                />
+                               <select
+                                 value={cita.fisioterapeuta || 'Liliana'}
+                                 onChange={(e) => handleUpdateCitaFisioterapeuta(cita.id, e.target.value)}
+                                 className="bg-white px-3 py-2 rounded-xl text-xs font-black text-rose-950 border border-rose-100 outline-none focus:border-rose-300 w-full cursor-pointer uppercase tracking-widest text-[9px]"
+                               >
+                                 <option value="Liliana">Liliana</option>
+                                 <option value="Luisa">Luisa</option>
+                               </select>
                                <div className="flex items-center justify-between gap-4">
                                  <div className="flex items-center gap-2">
                                    <span className={`text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${cita.estado === 'completada' || cita.estado === 'completado' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}>

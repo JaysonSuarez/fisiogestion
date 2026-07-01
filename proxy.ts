@@ -55,6 +55,10 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const isLuisa = user?.email?.toLowerCase().includes('luisa')
+
+  const protectedAdminRoutes = ['/finanzas', '/diezmo', '/ajustes']
+  const isProtectedAdminRoute = protectedAdminRoutes.some(route => request.nextUrl.pathname.startsWith(route))
 
   // Redirigir a login si no hay usuario y no está en la ruta de login ni archivos estáticos
   if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/agendar')) {
@@ -65,6 +69,13 @@ export async function proxy(request: NextRequest) {
 
   // Redirigir a inicio si ya hay usuario pero está en login
   if (user && request.nextUrl.pathname.startsWith('/login')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
+  // Redirigir a inicio si es Luisa e intenta acceder a ruta protegida de Admin
+  if (user && isLuisa && isProtectedAdminRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

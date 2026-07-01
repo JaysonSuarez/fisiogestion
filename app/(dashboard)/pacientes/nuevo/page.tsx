@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCachedUser } from '@/lib/supabase'
 import { UserPlus, ArrowLeft, User, Phone, Stethoscope, Activity, FileText, Loader2, CheckCircle } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
 
@@ -18,6 +18,19 @@ export default function NuevoPacientePage() {
     title: '',
     message: ''
   })
+
+  const [isLuisa, setIsLuisa] = useState(false)
+  const [selectedFisio, setSelectedFisio] = useState('Liliana')
+
+  useEffect(() => {
+    getCachedUser().then((user) => {
+      const isLu = user?.email?.toLowerCase().includes('luisa')
+      setIsLuisa(!!isLu)
+      if (isLu) {
+        setSelectedFisio('Luisa')
+      }
+    })
+  }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -48,7 +61,8 @@ export default function NuevoPacientePage() {
           estado,
           notas_iniciales,
           documento_identidad,
-          sexo
+          sexo,
+          fisioterapeuta: selectedFisio
         }])
 
       if (insertError) throw insertError
@@ -173,6 +187,22 @@ export default function NuevoPacientePage() {
               <input name="edad" className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-slate-50 text-slate-800 font-bold" type="number" placeholder="Ej: 25" />
             </div>
           </div>
+
+          {!isLuisa && (
+            <div className="form-group">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
+                Asignar Fisioterapeuta
+              </label>
+              <select 
+                value={selectedFisio}
+                onChange={e => setSelectedFisio(e.target.value)}
+                className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer"
+              >
+                <option value="Liliana">Liliana</option>
+                <option value="Luisa">Luisa</option>
+              </select>
+            </div>
+          )}
 
           <div className="form-group">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
