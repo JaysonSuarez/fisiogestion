@@ -31,6 +31,24 @@ export const OfflineSync = {
     return JSON.parse(cached).data;
   },
 
+  // Limpiar la caché del dashboard para evitar fantasmas de datos
+  clearDashboardCache: () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(CACHE_PREFIX + 'dashboard-')) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+      }
+    } catch (e) {
+      console.error('Error clearing dashboard cache', e);
+    }
+  },
+
   // Añadir una acción a la cola de sincronización (Escritura offline)
   queueAction: (table: string, action: 'insert' | 'update' | 'delete', payload: any) => {
     const queue = OfflineSync.getQueue();

@@ -66,15 +66,17 @@ export default function DashboardPage() {
     message: ''
   })
 
-  async function loadDashboard() {
+  async function loadDashboard(useCache = true) {
     const now = new Date()
     const todayStr = format(now, 'yyyy-MM-dd')
 
     // 1. Cargar desde caché (Offline First)
-    const cachedData = OfflineSync.getFromCache(`dashboard-${selectedMonth}`);
-    if (cachedData) {
-      setData(cachedData);
-      setLoading(false);
+    if (useCache) {
+      const cachedData = OfflineSync.getFromCache(`dashboard-${selectedMonth}`);
+      if (cachedData) {
+        setData(cachedData);
+        setLoading(false);
+      }
     }
 
     try {
@@ -162,13 +164,13 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    loadDashboard()
+    loadDashboard(true)
     const channel = supabase
       .channel('dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sesiones' }, () => loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'citas' }, () => loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes' }, () => loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_cita' }, () => loadDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sesiones' }, () => loadDashboard(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'citas' }, () => loadDashboard(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes' }, () => loadDashboard(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_cita' }, () => loadDashboard(false))
       .subscribe()
 
     return () => {
@@ -223,12 +225,16 @@ export default function DashboardPage() {
         
         if (error) throw error
         
-        setData((prev: any) => ({
-          ...prev,
-          citasHoy: prev.citasHoy.map((c: any) => 
-            c.id === verificationCita.id ? { ...c, estado: 'completada' } : c
-          )
-        }))
+        setData((prev: any) => {
+          const updated = {
+            ...prev,
+            citasHoy: prev.citasHoy.map((c: any) => 
+              c.id === verificationCita.id ? { ...c, estado: 'completada' } : c
+            )
+          }
+          OfflineSync.saveToCache(`dashboard-${selectedMonth}`, updated)
+          return updated
+        })
         
         setVerificationCita(null)
         setNotification({
@@ -262,14 +268,26 @@ export default function DashboardPage() {
       
       if (error) throw error
 
-      setData((prev: any) => ({
-        ...prev,
-        citasHoy: prev.citasHoy.map((c: any) => 
+      const todayStr = format(new Date(), 'yyyy-MM-dd')
+      const isStillToday = rescheduleData.fecha === todayStr
+
+      setData((prev: any) => {
+        const updatedCitas = prev.citasHoy.map((c: any) => 
           c.id === verificationCita.id 
             ? { ...c, fecha: rescheduleData.fecha, hora_inicio: rescheduleData.hora, estado: 'pendiente' } 
             : c
         )
-      }))
+        const filteredCitas = isStillToday 
+          ? updatedCitas 
+          : updatedCitas.filter((c: any) => c.id !== verificationCita.id)
+
+        const updated = {
+          ...prev,
+          citasHoy: filteredCitas
+        }
+        OfflineSync.saveToCache(`dashboard-${selectedMonth}`, updated)
+        return updated
+      })
       
       setVerificationCita(null)
       setIsRescheduling(false)

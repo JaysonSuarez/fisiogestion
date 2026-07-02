@@ -140,6 +140,9 @@ export default function AgendaPage() {
         
         if (error) throw error
         
+        // Limpiar la caché del dashboard para evitar fantasmas
+        OfflineSync.clearDashboardCache()
+        
         // Update local state immediately to avoid the race condition in useEffect
         setCitas(prev => prev.map(c => 
           c.id === verificationCita.id ? { ...c, estado: 'completada' } : c
@@ -185,6 +188,9 @@ export default function AgendaPage() {
         .eq('id', verificationCita.id)
       
       if (error) throw error
+
+      // Limpiar la caché del dashboard para evitar fantasmas
+      OfflineSync.clearDashboardCache()
 
       // Update local state
       setCitas(prev => prev.map(c => 
