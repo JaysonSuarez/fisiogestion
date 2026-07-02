@@ -32,10 +32,11 @@ export default function NuevaSesionPage({
   const [loading, setLoading] = useState(false)
   const [fetchingPacientes, setFetchingPacientes] = useState(true)
   const [pacientes, setPacientes] = useState<any[]>([])
+  const [isLuisa, setIsLuisa] = useState(false)
   
   const [pacienteId, setPacienteId] = useState(resolvedParams.paciente ?? '')
   const [cantidadSesiones, setCantidadSesiones] = useState<number>(1)
-  const [valorPorSesion, setValorPorSesion] = useState<number>(95000)
+  const [valorPorSesion, setValorPorSesion] = useState<number>(60000)
   const [tipoPlan, setTipoPlan] = useState('valoracion')
 
   // Notification State
@@ -61,6 +62,7 @@ export default function NuevaSesionPage({
       try {
         const user = await getCachedUser()
         const isLu = user?.email?.toLowerCase().includes('luisa')
+        setIsLuisa(!!isLu)
 
         let query = supabase.from('pacientes').select('id, nombre, fisioterapeuta').order('nombre')
         if (isLu) {
@@ -87,11 +89,11 @@ export default function NuevaSesionPage({
   ]
 
   const getMinPrice = (cantidad: number, type: string) => {
-    if (type === 'valoracion') return 95000
-    if (cantidad === 1) return 75000
-    if (cantidad === 5) return 72000 // 360,000 total
-    if (cantidad === 10) return 68000 // 680,000 total
-    return 75000 
+    if (type === 'valoracion') return 60000
+    if (cantidad === 1) return 100000
+    if (cantidad === 5) return 70000 // 350,000 total
+    if (cantidad === 10) return 70000 // 700,000 total
+    return 70000 
   }
 
   const handleCambioSesiones = (val: number, type: string) => {
@@ -150,16 +152,16 @@ export default function NuevaSesionPage({
       const activeFisio = isLu ? 'Luisa' : patientFisio
 
       let currentCitaDate = new Date(fechaInicioStr + 'T12:00:00')
-      let abonoRestante = hizoAbono ? Number(montoAbono) : 0
+      let abonoRestante = hizoAbono && !isLu ? Number(montoAbono) : 0
 
       // Crear solo un registro de "Plan" (sesion) primero para obtener su ID
       const { data: planData, error: planError } = await supabase.from('sesiones').insert([{
         paciente_id: pacienteId,
         fecha: fechaInicioStr,
         valor: valorTotal,
-        monto_pagado: hizoAbono ? abonoRestante : 0,
-        metodo_pago: hizoAbono ? metodoPago : null,
-        estado_pago: (hizoAbono && abonoRestante >= valorTotal) ? 'pagado' : 'pendiente',
+        monto_pagado: (hizoAbono && !isLu) ? abonoRestante : 0,
+        metodo_pago: (hizoAbono && !isLu) ? metodoPago : null,
+        estado_pago: (hizoAbono && !isLu && abonoRestante >= valorTotal) ? 'pagado' : 'pendiente',
         nota_clinica: `[Plan de ${tipoPlan === 'valoracion' ? 'Valoración' : cantidadSesiones + ' sesiones'}] ${nota_clinica}`,
         duracion_minutos: 60 * cantidadSesiones
       }]).select('id').single()
@@ -296,7 +298,7 @@ export default function NuevaSesionPage({
 
           <div className="pt-8 border-t border-rose-50 space-y-6">
             <div className="grid grid-cols-2 gap-6">
-              <div className="form-group">
+              <div className={`form-group ${isLuisa ? 'col-span-2' : ''}`}>
                 <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Sesiones</label>
                 <select 
                   className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-white font-black text-rose-600 shadow-sm appearance-none"
@@ -313,28 +315,32 @@ export default function NuevaSesionPage({
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Precio P/S</label>
-                <div className="relative">
-                  <span className="absolute left-6 top-1/2 -translate-y-1/2 text-rose-100 font-black">$</span>
-                  <input 
-                    className="w-full pl-10 pr-6 py-4 rounded-[24px] border-2 border-rose-50 focus:ring-4 outline-none font-black text-rose-900 transition-all focus:border-rose-400 focus:ring-rose-50 bg-white"
-                    type="number" 
-                    value={valorPorSesion || ''} 
-                    onChange={e => handleCambioValor(Number(e.target.value))}
-                    required 
-                  />
+              {!isLuisa && (
+                <div className="form-group">
+                  <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Precio P/S</label>
+                  <div className="relative">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-rose-100 font-black">$</span>
+                    <input 
+                      className="w-full pl-10 pr-6 py-4 rounded-[24px] border-2 border-rose-50 focus:ring-4 outline-none font-black text-rose-900 transition-all focus:border-rose-400 focus:ring-rose-50 bg-white"
+                      type="number" 
+                      value={valorPorSesion || ''} 
+                      onChange={e => handleCambioValor(Number(e.target.value))}
+                      required 
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            <div className="bg-rose-600 rounded-[35px] p-8 flex flex-col items-center shadow-2xl shadow-rose-200 relative overflow-hidden group">
-               <div className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-125 transition-transform duration-700">
-                  <Flower2 size={100} />
-               </div>
-              <span className="text-[10px] font-black text-rose-200 uppercase tracking-[0.3em] mb-2 relative z-10">Total Inversión</span>
-              <span className="text-4xl font-black text-white tracking-tighter relative z-10">{formatCOP(valorTotal)}</span>
-            </div>
+            {!isLuisa && (
+              <div className="bg-rose-600 rounded-[35px] p-8 flex flex-col items-center shadow-2xl shadow-rose-200 relative overflow-hidden group">
+                 <div className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-125 transition-transform duration-700">
+                    <Flower2 size={100} />
+                 </div>
+                <span className="text-[10px] font-black text-rose-200 uppercase tracking-[0.3em] mb-2 relative z-10">Total Inversión</span>
+                <span className="text-4xl font-black text-white tracking-tighter relative z-10">{formatCOP(valorTotal)}</span>
+              </div>
+            )}
           </div>
 
           <div className="pt-8 border-t border-rose-50 space-y-6">
@@ -375,47 +381,47 @@ export default function NuevaSesionPage({
                 </div>
               </div>
             )}
-          </div>
+                 {!isLuisa && (
+            <div className="pt-8 border-t border-rose-50">
+              <div className="bg-rose-50/50 p-8 rounded-[40px] border-4 border-white shadow-inner relative overflow-hidden group">
+                 <div className="absolute -left-6 -bottom-6 text-rose-100/50 group-hover:scale-110 transition-transform">
+                    <Heart size={80} />
+                 </div>
+                <div className="flex items-center justify-between mb-6 relative z-10">
+                  <span className="font-black text-rose-950 text-[10px] uppercase tracking-[0.2em]">¿Registrar Abono?</span>
+                  <label className="relative inline-flex inline-flex items-center cursor-pointer scale-110">
+                    <input type="checkbox" className="sr-only peer" checked={hizoAbono} onChange={e => setHizoAbono(e.target.checked)} />
+                    <div className="w-12 h-6 bg-rose-100 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-rose-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-500"></div>
+                  </label>
+                </div>
 
-          <div className="pt-8 border-t border-rose-50">
-            <div className="bg-rose-50/50 p-8 rounded-[40px] border-4 border-white shadow-inner relative overflow-hidden group">
-               <div className="absolute -left-6 -bottom-6 text-rose-100/50 group-hover:scale-110 transition-transform">
-                  <Heart size={80} />
-               </div>
-              <div className="flex items-center justify-between mb-6 relative z-10">
-                <span className="font-black text-rose-950 text-[10px] uppercase tracking-[0.2em]">¿Registrar Abono?</span>
-                <label className="relative inline-flex items-center cursor-pointer scale-110">
-                  <input type="checkbox" className="sr-only peer" checked={hizoAbono} onChange={e => setHizoAbono(e.target.checked)} />
-                  <div className="w-12 h-6 bg-rose-100 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-rose-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-500"></div>
-                </label>
-              </div>
-
-              {hizoAbono && (
-                <div className="animate-in slide-in-from-top-4 duration-500 relative z-10">
-                  <div className="form-group">
-                    <div className="relative">
-                      <span className="absolute left-6 top-1/2 -translate-y-1/2 text-rose-200 font-black text-2xl">$</span>
-                      <input 
-                        type="number" 
-                        value={montoAbono}
-                        onChange={(e) => setMontoAbono(e.target.value)}
-                        className="w-full pl-12 pr-6 py-5 rounded-[24px] border-2 border-rose-100 focus:border-rose-500 outline-none font-black text-3xl text-rose-900 bg-white text-center"
-                        placeholder="0"
-                        required={hizoAbono}
-                      />
+                {hizoAbono && (
+                  <div className="animate-in slide-in-from-top-4 duration-500 relative z-10">
+                    <div className="form-group">
+                      <div className="relative">
+                        <span className="absolute left-6 top-1/2 -translate-y-1/2 text-rose-200 font-black text-2xl">$</span>
+                        <input 
+                          type="number" 
+                          value={montoAbono}
+                          onChange={(e) => setMontoAbono(e.target.value)}
+                          className="w-full pl-12 pr-6 py-5 rounded-[24px] border-2 border-rose-100 focus:border-rose-50 outline-none font-black text-3xl text-rose-900 bg-white text-center"
+                          placeholder="0"
+                          required={hizoAbono}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!hizoAbono && (
-                <div className="p-4 bg-white/50 rounded-2xl border border-rose-100/30 flex items-center justify-center gap-3 relative z-10">
-                   <AlertCircle size={14} className="text-rose-400" />
-                   <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest italic leading-none">Deuda proyectada: {formatCOP(valorTotal)}</span>
-                </div>
-              )}
+                {!hizoAbono && (
+                  <div className="p-4 bg-white/50 rounded-2xl border border-rose-100/30 flex items-center justify-center gap-3 relative z-10">
+                     <AlertCircle size={14} className="text-rose-400" />
+                     <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest italic leading-none">Deuda proyectada: {formatCOP(valorTotal)}</span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}      </div>
 
           <div className="space-y-4 pt-4">
             <button 

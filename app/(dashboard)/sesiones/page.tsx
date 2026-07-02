@@ -42,14 +42,48 @@ export default function SesionesPage() {
       const startDate = `${year}-${month}-01`
       const endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0]
 
-      const { data } = await supabase
-        .from('sesiones')
-        .select('*, pacientes(nombre, valor_sesion, fisioterapeuta), citas(id, estado, fecha, hora_inicio, notas, fisioterapeuta)')
+      // 1. Obtener IDs de sesiones con citas en el mes seleccionado
+      const { data: citasEnMes } = await supabase
+        .from('citas')
+        .select('sesion_id')
         .gte('fecha', startDate)
         .lte('fecha', endDate)
+        .not('sesion_id', 'is', null)
+
+      const sesionIds = Array.from(new Set(citasEnMes?.map(c => c.sesion_id).filter(Boolean) || []))
+
+      // 2. Obtener sesiones que inician en el mes
+      let queryBase = supabase
+        .from('sesiones')
+        .select('*, pacientes(nombre, valor_sesion, fisioterapeuta), citas(id, estado, fecha, hora_inicio, notas, fisioterapeuta)')
         .order('fecha', { ascending: false })
+
+      const { data: sesionesStartMonth } = await queryBase
+        .gte('fecha', startDate)
+        .lte('fecha', endDate)
+
+      let combinedSessions = sesionesStartMonth || []
+
+      // 3. Obtener sesiones con citas en el mes que no inician en el mes
+      if (sesionIds.length > 0) {
+        const loadedIds = new Set(combinedSessions.map(s => s.id))
+        const missingIds = sesionIds.filter(id => !loadedIds.has(id))
+
+        if (missingIds.length > 0) {
+          const { data: sesionesSpanning } = await supabase
+            .from('sesiones')
+            .select('*, pacientes(nombre, valor_sesion, fisioterapeuta), citas(id, estado, fecha, hora_inicio, notas, fisioterapeuta)')
+            .in('id', missingIds)
+
+          if (sesionesSpanning) {
+            combinedSessions = [...combinedSessions, ...sesionesSpanning]
+            // Ordenar por fecha descendente
+            combinedSessions.sort((a, b) => b.fecha.localeCompare(a.fecha))
+          }
+        }
+      }
         
-      let filteredData = data || []
+      let filteredData = combinedSessions
       if (isLu) {
         filteredData = filteredData.filter((s: any) => s.pacientes?.fisioterapeuta === 'Luisa')
       }
@@ -361,24 +395,26 @@ export default function SesionesPage() {
               </div>
               
               <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                    <div className="bg-rose-50/50 p-6 rounded-[32px] border-4 border-white shadow-inner">
-                      <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-3 block">Precio Total del Plan</label>
-                      <div className="relative">
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-rose-200 font-black text-xl">$</span>
-                        <input 
-                          type="number"
-                          value={localValor}
-                          onChange={(e) => setLocalValor(Number(e.target.value))}
-                          className="w-full bg-transparent border-none focus:ring-0 text-3xl font-black text-rose-600 tracking-tighter pl-6"
-                        />
+                 {!isLuisa && (
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                      <div className="bg-rose-50/50 p-6 rounded-[32px] border-4 border-white shadow-inner">
+                        <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-3 block">Precio Total del Plan</label>
+                        <div className="relative">
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 text-rose-200 font-black text-xl">$</span>
+                          <input 
+                            type="number"
+                            value={localValor}
+                            onChange={(e) => setLocalValor(Number(e.target.value))}
+                            className="w-full bg-transparent border-none focus:ring-0 text-3xl font-black text-rose-600 tracking-tighter pl-6"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-center md:text-left px-4">
-                       <span className="text-[10px] font-black text-rose-950 uppercase block mb-1">Resumen</span>
-                       <p className="text-xs text-rose-400 font-medium leading-relaxed">Puedes ajustar el precio libremente o según el número de sesiones.</p>
-                    </div>
-                 </div>
+                      <div className="text-center md:text-left px-4">
+                         <span className="text-[10px] font-black text-rose-950 uppercase block mb-1">Resumen</span>
+                         <p className="text-xs text-rose-400 font-medium leading-relaxed">Puedes ajustar el precio libremente o según el número de sesiones.</p>
+                      </div>
+                   </div>
+                 )}
 
                  <div className="space-y-4">
                     <div className="flex items-center justify-between px-2">

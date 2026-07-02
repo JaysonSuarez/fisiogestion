@@ -171,7 +171,7 @@ export default function SolicitudesWidget() {
                   <div>
                     <div className="font-black text-rose-950 text-base tracking-tight">{s.nombre} {s.apellido}</div>
                     <div className="text-[9px] font-black text-rose-400 uppercase tracking-widest mt-0.5">
-                      {s.num_sesiones} sesiones · {formatCOP(s.precio_total)}
+                      {isLuisa ? `${s.num_sesiones} sesiones` : `${s.num_sesiones} sesiones · ${formatCOP(s.precio_total)}`}
                     </div>
                   </div>
                 </div>
