@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabaseEncuesta } from '@/lib/supabaseEncuesta'
+import { getSupabaseEncuesta } from '@/lib/supabaseEncuesta'
 import { Search, CheckCircle2, XCircle, Clock, Loader2, Ticket, Tag } from 'lucide-react'
 
 type EstadoCupon = 'valido' | 'expirado' | 'usado' | 'no_encontrado'
@@ -35,7 +35,7 @@ export default function ValidarCuponPage() {
     setLoading(true)
     setResultado(null)
 
-    const { data, error } = await supabaseEncuesta
+    const { data, error } = await getSupabaseEncuesta()
       .from('encuestas_fisioterapia')
       .select('codigo_cupon, cupon_usado, nombre, objetivo, fecha_expiracion')
       .eq('codigo_cupon', codigoLimpio)
@@ -58,7 +58,7 @@ export default function ValidarCuponPage() {
     if (!resultado?.codigo_cupon || marking) return
     setMarking(true)
 
-    await supabaseEncuesta
+    await getSupabaseEncuesta()
       .from('encuestas_fisioterapia')
       .update({ cupon_usado: true })
       .eq('codigo_cupon', resultado.codigo_cupon)
