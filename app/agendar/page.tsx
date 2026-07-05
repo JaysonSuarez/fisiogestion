@@ -6,9 +6,11 @@ import { format, addDays, startOfWeek, isBefore, isSameDay, startOfDay } from 'd
 import { es } from 'date-fns/locale'
 import {
   Heart, Flower2, CheckCircle, Loader2, Calendar, Clock, User,
-  Phone, Stethoscope, ChevronRight, ChevronLeft, Sparkles, Info
+  Phone, Stethoscope, ChevronRight, ChevronLeft, Sparkles, Info,
+  Ticket, Tag, XCircle
 } from 'lucide-react'
 import { isHolidayColombia } from '@/lib/colombian-holidays'
+import { validarCupon, reclamarCupon, aplicarDescuentoCupon, type ResultadoCupon } from '@/lib/cupones'
 
 // ─── Precios estáticos según número de sesiones ───────────────────────────────
 const PLANES_PRECIOS = [
@@ -46,6 +48,11 @@ export default function AgendarPage() {
   const [telefono, setTelefono] = useState('')
   const [diagnostico, setDiagnostico] = useState('')
   const [planSeleccionado, setPlanSeleccionado] = useState<typeof PLANES_PRECIOS[0] | null>(null)
+
+  // Cupón
+  const [cuponCodigo, setCuponCodigo] = useState('')
+  const [cuponResultado, setCuponResultado] = useState<ResultadoCupon | null>(null)
+  const [validandoCupon, setValidandoCupon] = useState(false)
 
   // Date picker state
   const [weekStart, setWeekStart] = useState(() => {
@@ -124,10 +131,38 @@ export default function AgendarPage() {
     return days
   })()
 
+  // ─── Cupón: cálculos derivados ──────────────────────────────────────────────
+  const esValoracion = planSeleccionado?.id === 'evaluacion'
+  const cuponAplicado = cuponResultado?.estado === 'valido'
+  const precioFinal = planSeleccionado
+    ? (cuponAplicado ? aplicarDescuentoCupon(planSeleccionado.precio, esValoracion) : planSeleccionado.precio)
+    : 0
+
+  async function handleValidarCupon() {
+    if (!cuponCodigo.trim() || validandoCupon) return
+    setValidandoCupon(true)
+    const r = await validarCupon(cuponCodigo)
+    setCuponResultado(r)
+    setValidandoCupon(false)
+  }
+
   async function handleSubmit() {
     if (!planSeleccionado) return
     setIsLoading(true)
     try {
+      // 0. Si hay cupón aplicado, reclamarlo de forma atómica (un solo uso).
+      let notaCupon = ''
+      if (cuponAplicado && cuponResultado?.codigo_cupon) {
+        const ok = await reclamarCupon(cuponResultado.codigo_cupon)
+        if (!ok) {
+          setCuponResultado({ estado: 'usado' })
+          alert('Ese cupón ya fue reclamado. Se agendará sin descuento; verifica el precio.')
+          setIsLoading(false)
+          return
+        }
+        notaCupon = ` [Cupón ${cuponResultado.codigo_cupon} aplicado: ${esValoracion ? 'Valoración gratis' : '10% desc.'}]`
+      }
+
       // 1. Guardar la solicitud en la base de datos
       const { error } = await supabase
         .from('solicitudes_cita')
@@ -139,15 +174,15 @@ export default function AgendarPage() {
           sexo,
           edad: parseInt(edad),
           telefono,
-          diagnostico,
+          diagnostico: diagnostico + notaCupon,
           num_sesiones: planSeleccionado.sesiones,
-          precio_sesion: Math.round(planSeleccionado.precio / planSeleccionado.sesiones),
-          precio_total: planSeleccionado.precio,
+          precio_sesion: Math.round(precioFinal / planSeleccionado.sesiones),
+          precio_total: precioFinal,
           fechas_solicitadas: slotsSeleccionados,
           hora_preferida: slotsSeleccionados[0]?.hora || '08:00',
           estado: 'pendiente',
         }])
-      
+
       if (error) throw error
 
       // 2. Disparar notificación push al profesional (Liliana)
@@ -377,6 +412,55 @@ export default function AgendarPage() {
               ))}
             </div>
 
+            {/* Cupón de descuento */}
+            <div className="border-2 border-dashed border-rose-100 rounded-[24px] p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Ticket size={16} className="text-rose-400" />
+                <span className="font-black text-rose-950 text-[11px] uppercase tracking-widest">¿Tienes un cupón?</span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={cuponCodigo}
+                  onChange={e => { setCuponCodigo(e.target.value.toUpperCase()); setCuponResultado(null) }}
+                  placeholder="THERAPY10-XXXXX"
+                  className="flex-1 bg-rose-50/50 border border-rose-100 rounded-2xl px-4 py-3 text-sm font-bold text-rose-950 outline-none focus:border-rose-300 transition-all tracking-widest"
+                />
+                <button
+                  type="button"
+                  onClick={handleValidarCupon}
+                  disabled={validandoCupon || !cuponCodigo.trim()}
+                  className="px-5 py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
+                >
+                  {validandoCupon ? <Loader2 size={14} className="animate-spin" /> : 'Aplicar'}
+                </button>
+              </div>
+
+              {cuponResultado && cuponResultado.estado === 'valido' && (
+                <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold">
+                  <CheckCircle size={14} />
+                  {esValoracion ? '¡Valoración gratis aplicada!' : '¡10% de descuento aplicado!'}
+                </div>
+              )}
+              {cuponResultado && cuponResultado.estado !== 'valido' && (
+                <div className="flex items-center gap-2 text-rose-500 text-xs font-bold">
+                  <XCircle size={14} />
+                  {cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
+                   cuponResultado.estado === 'expirado' ? 'Este cupón está vencido.' :
+                   'Código no encontrado.'}
+                </div>
+              )}
+
+              {cuponAplicado && planSeleccionado && (
+                <div className="flex items-center justify-between bg-emerald-50 rounded-2xl px-4 py-3">
+                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Nuevo total</span>
+                  <span className="font-black text-emerald-700">
+                    <span className="line-through text-emerald-400 text-xs mr-2">{formatCOP(planSeleccionado.precio)}</span>
+                    {formatCOP(precioFinal)}
+                  </span>
+                </div>
+              )}
+            </div>
+
             <div className="bg-rose-50/60 rounded-2xl p-4 flex items-start gap-3">
               <Info size={16} className="text-rose-400 mt-0.5 flex-shrink-0" />
               <p className="text-xs text-rose-400 font-medium leading-relaxed">
@@ -548,9 +632,18 @@ export default function AgendarPage() {
                   <span className="text-xs text-rose-400 font-bold">Sesiones</span>
                   <span className="text-xs font-black text-rose-950">{planSeleccionado.sesiones} sesiones</span>
                 </div>
+                {cuponAplicado && (
+                  <div className="flex justify-between">
+                    <span className="text-xs text-emerald-500 font-bold flex items-center gap-1"><Tag size={11} /> Cupón {cuponResultado?.codigo_cupon}</span>
+                    <span className="text-xs font-black text-emerald-600">{esValoracion ? 'Valoración gratis' : '-10%'}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-xs text-rose-400 font-bold">Valor Total</span>
-                  <span className="text-sm font-black text-rose-600">{formatCOP(planSeleccionado.precio)}</span>
+                  <span className="text-sm font-black text-rose-600">
+                    {cuponAplicado && <span className="line-through text-rose-300 text-xs mr-2">{formatCOP(planSeleccionado.precio)}</span>}
+                    {formatCOP(precioFinal)}
+                  </span>
                 </div>
               </div>
 

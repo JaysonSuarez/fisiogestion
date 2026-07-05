@@ -1,18 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { getSupabaseEncuesta } from '@/lib/supabaseEncuesta'
-import { Search, CheckCircle2, XCircle, Clock, Loader2, Ticket, Tag } from 'lucide-react'
-
-type EstadoCupon = 'valido' | 'expirado' | 'usado' | 'no_encontrado'
-
-type ResultadoCupon = {
-  estado: EstadoCupon
-  nombre?: string
-  objetivo?: string
-  fecha_expiracion?: string
-  codigo_cupon?: string
-}
+import Link from 'next/link'
+import { Search, CheckCircle2, XCircle, Clock, Loader2, Ticket, Tag, ArrowLeft } from 'lucide-react'
+import { validarCupon as buscarCupon, reclamarCupon, type EstadoCupon, type ResultadoCupon } from '@/lib/cupones'
 
 const STATUS_CONFIG: Record<EstadoCupon, { icon: typeof CheckCircle2; color: string; bg: string; border: string; label: string }> = {
   valido:        { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'CUPÓN VÁLIDO' },
@@ -27,30 +18,14 @@ export default function ValidarCuponPage() {
   const [marking, setMarking] = useState(false)
   const [resultado, setResultado] = useState<ResultadoCupon | null>(null)
 
-  async function validarCupon(e: React.FormEvent) {
+  async function handleValidar(e: React.FormEvent) {
     e.preventDefault()
-    const codigoLimpio = codigo.trim().toUpperCase()
-    if (!codigoLimpio || loading) return
+    if (!codigo.trim() || loading) return
 
     setLoading(true)
     setResultado(null)
-
-    const { data, error } = await getSupabaseEncuesta()
-      .from('encuestas_fisioterapia')
-      .select('codigo_cupon, cupon_usado, nombre, objetivo, fecha_expiracion')
-      .eq('codigo_cupon', codigoLimpio)
-      .single()
-
-    if (error || !data) {
-      setResultado({ estado: 'no_encontrado' })
-    } else if (data.cupon_usado) {
-      setResultado({ estado: 'usado', nombre: data.nombre, objetivo: data.objetivo, fecha_expiracion: data.fecha_expiracion, codigo_cupon: data.codigo_cupon })
-    } else if (new Date(data.fecha_expiracion) < new Date()) {
-      setResultado({ estado: 'expirado', nombre: data.nombre, objetivo: data.objetivo, fecha_expiracion: data.fecha_expiracion, codigo_cupon: data.codigo_cupon })
-    } else {
-      setResultado({ estado: 'valido', nombre: data.nombre, objetivo: data.objetivo, fecha_expiracion: data.fecha_expiracion, codigo_cupon: data.codigo_cupon })
-    }
-
+    const r = await buscarCupon(codigo)
+    setResultado(r)
     setLoading(false)
   }
 
@@ -58,17 +33,26 @@ export default function ValidarCuponPage() {
     if (!resultado?.codigo_cupon || marking) return
     setMarking(true)
 
-    await getSupabaseEncuesta()
-      .from('encuestas_fisioterapia')
-      .update({ cupon_usado: true })
-      .eq('codigo_cupon', resultado.codigo_cupon)
-
+    const ok = await reclamarCupon(resultado.codigo_cupon)
+    // Si otro usuario lo reclamó primero, igualmente queda como usado.
     setResultado(prev => prev ? { ...prev, estado: 'usado' } : prev)
+    if (!ok) {
+      // no-op: el estado ya refleja "usado"
+    }
     setMarking(false)
   }
 
   return (
     <div className="min-h-screen bg-[#fffafa] flex items-center justify-center p-4">
+      {/* Botón volver */}
+      <Link
+        href="/"
+        className="fixed top-6 left-6 z-20 w-11 h-11 bg-white/80 backdrop-blur border border-rose-100 rounded-2xl flex items-center justify-center text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-colors shadow-sm"
+        aria-label="Volver al inicio"
+      >
+        <ArrowLeft size={20} />
+      </Link>
+
       {/* Ambient blobs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-rose-100/40 rounded-full blur-[100px]" />
@@ -87,7 +71,7 @@ export default function ValidarCuponPage() {
 
         {/* Formulario */}
         <form
-          onSubmit={validarCupon}
+          onSubmit={handleValidar}
           className="bg-white/80 backdrop-blur-xl p-8 rounded-[48px] shadow-2xl shadow-rose-200/40 border border-white/50 space-y-5"
         >
           <div className="relative group">
@@ -132,7 +116,7 @@ export default function ValidarCuponPage() {
                   <Tag size={20} className="text-emerald-500 shrink-0" />
                   <div>
                     <div className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-0.5">Descuento + Beneficio</div>
-                    <div className="font-black text-rose-950 text-lg">10% OFF · Valoración Gratuita</div>
+                    <div className="font-black text-rose-950 text-lg">Valoración Gratis · 10% OFF en planes</div>
                   </div>
                 </div>
               )}

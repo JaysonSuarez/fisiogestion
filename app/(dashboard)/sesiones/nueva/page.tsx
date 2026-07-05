@@ -4,9 +4,10 @@ import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase, getCachedUser } from '@/lib/supabase'
-import { ClipboardPlus, ArrowLeft, User, Calendar, Package, DollarSign, Wallet, CheckCircle, FileText, Info, Loader2, Clock, Check, AlertCircle, Sparkles, Flower2, Heart } from 'lucide-react'
+import { ClipboardPlus, ArrowLeft, User, Calendar, Package, DollarSign, Wallet, CheckCircle, FileText, Info, Loader2, Clock, Check, AlertCircle, Sparkles, Flower2, Heart, Ticket, Tag, XCircle } from 'lucide-react'
 import { addDays, isSunday, getDay } from 'date-fns'
 import NotificationModal from '@/components/ui/NotificationModal'
+import { validarCupon, reclamarCupon, aplicarDescuentoCupon, type ResultadoCupon } from '@/lib/cupones'
 
 const formatCOP = (valor: number) => {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
@@ -55,6 +56,11 @@ export default function NuevaSesionPage({
   const [hizoAbono, setHizoAbono] = useState(false)
   const [montoAbono, setMontoAbono] = useState('')
   const [metodoPago, setMetodoPago] = useState('efectivo')
+
+  // Cupón
+  const [cuponCodigo, setCuponCodigo] = useState('')
+  const [cuponResultado, setCuponResultado] = useState<ResultadoCupon | null>(null)
+  const [validandoCupon, setValidandoCupon] = useState(false)
 
   // Cargar pacientes reales de Supabase
   useEffect(() => {
@@ -115,6 +121,19 @@ export default function NuevaSesionPage({
 
   const valorTotal = cantidadSesiones * (valorPorSesion || 0)
 
+  // ─── Cupón: cálculos derivados ──────────────────────────────────────────────
+  const esValoracion = tipoPlan === 'valoracion'
+  const cuponAplicado = cuponResultado?.estado === 'valido'
+  const valorConDescuento = cuponAplicado ? aplicarDescuentoCupon(valorTotal, esValoracion) : valorTotal
+
+  async function handleValidarCupon() {
+    if (!cuponCodigo.trim() || validandoCupon) return
+    setValidandoCupon(true)
+    const r = await validarCupon(cuponCodigo)
+    setCuponResultado(r)
+    setValidandoCupon(false)
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!pacienteId) {
@@ -154,15 +173,33 @@ export default function NuevaSesionPage({
       let currentCitaDate = new Date(fechaInicioStr + 'T12:00:00')
       let abonoRestante = hizoAbono && !isLu ? Number(montoAbono) : 0
 
+      // Si hay cupón aplicado, reclamarlo de forma atómica (un solo uso).
+      let notaCupon = ''
+      if (cuponAplicado && cuponResultado?.codigo_cupon) {
+        const ok = await reclamarCupon(cuponResultado.codigo_cupon)
+        if (!ok) {
+          setCuponResultado({ estado: 'usado' })
+          setNotification({
+            isOpen: true,
+            type: 'error',
+            title: 'Cupón ya usado',
+            message: 'Ese cupón ya fue reclamado. Quita el cupón y verifica el precio antes de guardar.'
+          })
+          setLoading(false)
+          return
+        }
+        notaCupon = ` [Cupón ${cuponResultado.codigo_cupon}: ${esValoracion ? 'Valoración gratis' : '10% desc.'}]`
+      }
+
       // Crear solo un registro de "Plan" (sesion) primero para obtener su ID
       const { data: planData, error: planError } = await supabase.from('sesiones').insert([{
         paciente_id: pacienteId,
         fecha: fechaInicioStr,
-        valor: valorTotal,
+        valor: valorConDescuento,
         monto_pagado: (hizoAbono && !isLu) ? abonoRestante : 0,
         metodo_pago: (hizoAbono && !isLu) ? metodoPago : null,
-        estado_pago: (hizoAbono && !isLu && abonoRestante >= valorTotal) ? 'pagado' : 'pendiente',
-        nota_clinica: `[Plan de ${tipoPlan === 'valoracion' ? 'Valoración' : cantidadSesiones + ' sesiones'}] ${nota_clinica}`,
+        estado_pago: (hizoAbono && !isLu && abonoRestante >= valorConDescuento) ? 'pagado' : 'pendiente',
+        nota_clinica: `[Plan de ${tipoPlan === 'valoracion' ? 'Valoración' : cantidadSesiones + ' sesiones'}] ${nota_clinica}${notaCupon}`,
         duracion_minutos: 60 * cantidadSesiones
       }]).select('id').single()
 
@@ -338,7 +375,56 @@ export default function NuevaSesionPage({
                     <Flower2 size={100} />
                  </div>
                 <span className="text-[10px] font-black text-rose-200 uppercase tracking-[0.3em] mb-2 relative z-10">Total Inversión</span>
-                <span className="text-4xl font-black text-white tracking-tighter relative z-10">{formatCOP(valorTotal)}</span>
+                {cuponAplicado && (
+                  <span className="text-lg font-black text-rose-200/70 line-through tracking-tighter relative z-10">{formatCOP(valorTotal)}</span>
+                )}
+                <span className="text-4xl font-black text-white tracking-tighter relative z-10">{formatCOP(valorConDescuento)}</span>
+                {cuponAplicado && (
+                  <span className="mt-2 text-[9px] font-black text-white bg-white/20 px-3 py-1 rounded-full uppercase tracking-widest relative z-10">
+                    {esValoracion ? 'Valoración gratis' : '10% de descuento'} · Cupón
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Cupón de descuento */}
+            {!isLuisa && (
+              <div className="border-2 border-dashed border-rose-100 rounded-[28px] p-6 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Ticket size={14} className="text-rose-400" />
+                  <span className="font-black text-rose-950 text-[10px] uppercase tracking-[0.2em]">Cupón de descuento</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={cuponCodigo}
+                    onChange={e => { setCuponCodigo(e.target.value.toUpperCase()); setCuponResultado(null) }}
+                    placeholder="THERAPY10-XXXXX"
+                    className="flex-1 px-5 py-3 rounded-[20px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-rose-50/20 font-black text-rose-900 tracking-widest text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleValidarCupon}
+                    disabled={validandoCupon || !cuponCodigo.trim()}
+                    className="px-5 py-3 bg-rose-600 text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    {validandoCupon ? <Loader2 size={14} className="animate-spin" /> : 'Aplicar'}
+                  </button>
+                </div>
+                {cuponResultado && cuponResultado.estado === 'valido' && (
+                  <div className="flex items-center gap-2 text-emerald-600 text-xs font-black">
+                    <CheckCircle size={14} />
+                    {esValoracion ? '¡Valoración gratis aplicada!' : '¡10% de descuento aplicado!'}
+                    {cuponResultado.nombre && <span className="text-rose-300 font-bold">· {cuponResultado.nombre}</span>}
+                  </div>
+                )}
+                {cuponResultado && cuponResultado.estado !== 'valido' && (
+                  <div className="flex items-center gap-2 text-rose-500 text-xs font-black">
+                    <XCircle size={14} />
+                    {cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
+                     cuponResultado.estado === 'expirado' ? 'Este cupón está vencido.' :
+                     'Código no encontrado.'}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -416,7 +502,7 @@ export default function NuevaSesionPage({
                 {!hizoAbono && (
                   <div className="p-4 bg-white/50 rounded-2xl border border-rose-100/30 flex items-center justify-center gap-3 relative z-10">
                      <AlertCircle size={14} className="text-rose-400" />
-                     <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest italic leading-none">Deuda proyectada: {formatCOP(valorTotal)}</span>
+                     <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest italic leading-none">Deuda proyectada: {formatCOP(valorConDescuento)}</span>
                   </div>
                 )}
               </div>
