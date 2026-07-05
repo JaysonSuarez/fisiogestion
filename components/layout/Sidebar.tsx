@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useRef, useEffect, useState } from 'react'
 import {
   LayoutDashboard, Users, CalendarDays, Wallet,
-  ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars, Settings, FileText
+  ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars, Settings, FileText, Ticket
 } from 'lucide-react'
 
 const navItems = [
@@ -18,6 +18,7 @@ const navItems = [
   { href: '/finanzas',  label: 'Finanzas',    icon: Wallet },
   { href: '/diezmo',    label: 'Diezmo',      icon: Heart },
   { href: '/ajustes',   label: 'Ajustes',     icon: Settings },
+  { href: '/validar-cupon', label: 'Cupón',   icon: Ticket },
 ]
 
 export default function Sidebar() {
