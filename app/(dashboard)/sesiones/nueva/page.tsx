@@ -92,6 +92,12 @@ export default function NuevaSesionPage({
     { value: 1, label: '1 Sesión', type: 'fisioterapia' },
     { value: 5, label: '5 Sesiones', type: 'fisioterapia' },
     { value: 10, label: '10 Sesiones', type: 'fisioterapia' },
+    { value: 12, label: '12 Sesiones', type: 'fisioterapia' },
+    { value: 15, label: '15 Sesiones', type: 'fisioterapia' },
+    { value: 18, label: '18 Sesiones', type: 'fisioterapia' },
+    { value: 20, label: '20 Sesiones', type: 'fisioterapia' },
+    { value: 24, label: '24 Sesiones', type: 'fisioterapia' },
+    { value: 30, label: '30 Sesiones', type: 'fisioterapia' },
   ]
 
   const getMinPrice = (cantidad: number, type: string) => {

@@ -19,6 +19,7 @@ const PLANES_PRECIOS = [
   { id: 'recovery-premium',   sesiones: 1,  precio: 100000,  label: 'Recovery Premium' },
   { id: 'recovery-star',      sesiones: 5,  precio: 350000,  label: 'Recovery Star' },
   { id: 'recovery-balance',   sesiones: 10, precio: 700000,  label: 'Recovery Balance' },
+  { id: 'recovery-custom',    sesiones: 12, precio: 840000,  label: 'Plan Personalizado' },
 ]
 
 const HORARIOS_DISPONIBLES = [
@@ -48,6 +49,7 @@ export default function AgendarPage() {
   const [telefono, setTelefono] = useState('')
   const [diagnostico, setDiagnostico] = useState('')
   const [planSeleccionado, setPlanSeleccionado] = useState<typeof PLANES_PRECIOS[0] | null>(null)
+  const [customSesiones, setCustomSesiones] = useState(12)
 
   // Cupón
   const [cuponCodigo, setCuponCodigo] = useState('')
@@ -374,10 +376,18 @@ export default function AgendarPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {PLANES_PRECIOS.map(plan => (
+              {PLANES_PRECIOS.map(plan => {
+                const isCustom = plan.id === 'recovery-custom'
+                const currentPrecio = isCustom ? customSesiones * 70000 : plan.precio
+                const currentSesiones = isCustom ? customSesiones : plan.sesiones
+
+                return (
                 <button
                   key={plan.id}
-                  onClick={() => { setPlanSeleccionado(plan); setSlotsSeleccionados([]) }}
+                  onClick={() => { 
+                    setPlanSeleccionado(isCustom ? { ...plan, sesiones: currentSesiones, precio: currentPrecio } : plan); 
+                    setSlotsSeleccionados([]) 
+                  }}
                   className={`p-5 rounded-[24px] border-2 text-left transition-all active:scale-95 ${
                     plan.id === 'evaluacion' ? 'sm:col-span-2' : ''
                   } ${
@@ -389,15 +399,40 @@ export default function AgendarPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="font-black text-rose-950 text-lg tracking-tighter uppercase">{plan.label}</div>
-                      {plan.sesiones > 1 ? (
-                        <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
-                          {formatCOP(Math.round(plan.precio / plan.sesiones))} / sesión
+                      {isCustom ? (
+                        <div className="mt-2" onClick={e => e.stopPropagation()}>
+                          <select 
+                            className="bg-white border border-rose-200 rounded-lg px-2 py-1 text-xs font-bold text-rose-950 outline-none"
+                            value={customSesiones}
+                            onChange={e => {
+                              const val = Number(e.target.value);
+                              setCustomSesiones(val);
+                              if (planSeleccionado?.id === 'recovery-custom') {
+                                setPlanSeleccionado({
+                                  ...plan,
+                                  sesiones: val,
+                                  precio: val * 70000
+                                });
+                                setSlotsSeleccionados([]);
+                              }
+                            }}
+                          >
+                            {[12, 15, 18, 20, 24, 30].map(n => (
+                              <option key={n} value={n}>{n} sesiones</option>
+                            ))}
+                          </select>
                         </div>
                       ) : (
-                        plan.id !== 'evaluacion' && (
+                        currentSesiones > 1 ? (
                           <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
-                            {formatCOP(plan.precio)} / sesión
+                            {formatCOP(Math.round(currentPrecio / currentSesiones))} / sesión
                           </div>
+                        ) : (
+                          plan.id !== 'evaluacion' && (
+                            <div className="text-[9px] text-rose-400 font-black uppercase tracking-widest mt-0.5">
+                              {formatCOP(currentPrecio)} / sesión
+                            </div>
+                          )
                         )
                       )}
                     </div>
@@ -407,9 +442,9 @@ export default function AgendarPage() {
                       {planSeleccionado?.id === plan.id && <CheckCircle size={14} className="text-white" />}
                     </div>
                   </div>
-                  <div className="font-black text-2xl text-rose-600 tracking-tighter mt-2">{formatCOP(plan.precio)}</div>
+                  <div className="font-black text-2xl text-rose-600 tracking-tighter mt-2">{formatCOP(currentPrecio)}</div>
                 </button>
-              ))}
+              )})}
             </div>
 
             {/* Cupón de descuento */}
