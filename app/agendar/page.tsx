@@ -401,26 +401,27 @@ export default function AgendarPage() {
                       <div className="font-black text-rose-950 text-lg tracking-tighter uppercase">{plan.label}</div>
                       {isCustom ? (
                         <div className="mt-2" onClick={e => e.stopPropagation()}>
-                          <select 
-                            className="bg-white border border-rose-200 rounded-lg px-2 py-1 text-xs font-bold text-rose-950 outline-none"
-                            value={customSesiones}
-                            onChange={e => {
-                              const val = Number(e.target.value);
-                              setCustomSesiones(val);
-                              if (planSeleccionado?.id === 'recovery-custom') {
-                                setPlanSeleccionado({
-                                  ...plan,
-                                  sesiones: val,
-                                  precio: val * 70000
-                                });
-                                setSlotsSeleccionados([]);
-                              }
-                            }}
-                          >
-                            {[12, 15, 18, 20, 24, 30].map(n => (
-                              <option key={n} value={n}>{n} sesiones</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number"
+                              min="1"
+                              className="bg-white border border-rose-200 rounded-lg px-3 py-1.5 text-xs font-bold text-rose-950 outline-none w-20"
+                              value={customSesiones}
+                              onChange={e => {
+                                const val = Math.max(1, Number(e.target.value));
+                                setCustomSesiones(val);
+                                if (planSeleccionado?.id === 'recovery-custom') {
+                                  setPlanSeleccionado({
+                                    ...plan,
+                                    sesiones: val,
+                                    precio: val * 70000
+                                  });
+                                  setSlotsSeleccionados([]);
+                                }
+                              }}
+                            />
+                            <span className="text-[10px] text-rose-400 font-black uppercase tracking-widest">sesiones</span>
+                          </div>
                         </div>
                       ) : (
                         currentSesiones > 1 ? (

@@ -39,6 +39,7 @@ export default function NuevaSesionPage({
   const [cantidadSesiones, setCantidadSesiones] = useState<number>(1)
   const [valorPorSesion, setValorPorSesion] = useState<number>(60000)
   const [tipoPlan, setTipoPlan] = useState('valoracion')
+  const [isCustomSesiones, setIsCustomSesiones] = useState(false)
 
   // Notification State
   const [notification, setNotification] = useState<{isOpen: boolean, type: 'success' | 'error' | 'info', title: string, message: string}>({
@@ -93,11 +94,6 @@ export default function NuevaSesionPage({
     { value: 5, label: '5 Sesiones', type: 'fisioterapia' },
     { value: 10, label: '10 Sesiones', type: 'fisioterapia' },
     { value: 12, label: '12 Sesiones', type: 'fisioterapia' },
-    { value: 15, label: '15 Sesiones', type: 'fisioterapia' },
-    { value: 18, label: '18 Sesiones', type: 'fisioterapia' },
-    { value: 20, label: '20 Sesiones', type: 'fisioterapia' },
-    { value: 24, label: '24 Sesiones', type: 'fisioterapia' },
-    { value: 30, label: '30 Sesiones', type: 'fisioterapia' },
   ]
 
   const getMinPrice = (cantidad: number, type: string) => {
@@ -345,17 +341,36 @@ export default function NuevaSesionPage({
                 <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Sesiones</label>
                 <select 
                   className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-white font-black text-rose-600 shadow-sm appearance-none"
-                  value={`${cantidadSesiones}-${tipoPlan}`}
+                  value={isCustomSesiones ? 'custom' : `${cantidadSesiones}-${tipoPlan}`}
                   onChange={(e) => {
-                    const [val, type] = e.target.value.split('-')
-                    handleCambioSesiones(Number(val), type)
+                    if (e.target.value === 'custom') {
+                      setIsCustomSesiones(true)
+                      handleCambioSesiones(15, 'fisioterapia')
+                    } else {
+                      setIsCustomSesiones(false)
+                      const [val, type] = e.target.value.split('-')
+                      handleCambioSesiones(Number(val), type)
+                    }
                   }}
                   required
                 >
                   {opcionesSesiones.map((opt, idx) => (
                     <option key={idx} value={`${opt.value}-${opt.type}`}>{opt.label}</option>
                   ))}
+                  <option value="custom">Personalizado...</option>
                 </select>
+                {isCustomSesiones && (
+                  <div className="mt-3">
+                    <label className="text-[10px] font-black text-rose-300 uppercase mb-2 block">Número de Sesiones</label>
+                    <input 
+                      type="number"
+                      min="1"
+                      className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:ring-4 outline-none font-black text-rose-900 transition-all focus:border-rose-400 focus:ring-rose-50 bg-white"
+                      value={cantidadSesiones}
+                      onChange={e => handleCambioSesiones(Math.max(1, Number(e.target.value)), 'fisioterapia')}
+                    />
+                  </div>
+                )}
               </div>
 
               {!isLuisa && (
