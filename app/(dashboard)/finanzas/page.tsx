@@ -19,6 +19,7 @@ function FinanzasContent() {
   
   const [sesiones, setSesiones] = useState<any[]>([])
   const [pacientesDeudores, setPacientesDeudores] = useState<any[]>([])
+  const [pacientesPagados, setPacientesPagados] = useState<any[]>([])
   const [citasLuisa, setCitasLuisa] = useState<any[]>([])
   const [selectedPatient, setSelectedPatient] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'general' | 'luisa'>('general')
@@ -56,11 +57,28 @@ function FinanzasContent() {
 
       const { data: todas } = await supabase
         .from('sesiones')
-        .select('*')
+        .select('*, pacientes(nombre)')
         .gte('fecha', startDate)
         .lte('fecha', endDate)
 
       setSesiones(todas || [])
+
+      const pagadosRaw = (todas || []).filter(s => (s.monto_pagado || 0) > 0);
+      const agrupadosPagos: Record<string, any> = {}
+      pagadosRaw.forEach(s => {
+        const p = s.pacientes as any
+        if (!agrupadosPagos[s.paciente_id]) {
+          agrupadosPagos[s.paciente_id] = {
+            id: s.paciente_id,
+            nombre: p?.nombre ?? 'Desconocido',
+            totalPagado: 0,
+            sesiones: 0
+          }
+        }
+        agrupadosPagos[s.paciente_id].totalPagado += (s.monto_pagado || 0)
+        agrupadosPagos[s.paciente_id].sesiones += 1
+      })
+      setPacientesPagados(Object.values(agrupadosPagos).sort((a: any, b: any) => b.totalPagado - a.totalPagado))
 
       const { data: pendientes } = await supabase
         .from('sesiones')
@@ -399,6 +417,43 @@ function FinanzasContent() {
             <div className="col-span-full py-24 text-center card bg-rose-50/30 border-dashed border-rose-200">
                <Sparkles className="mx-auto mb-4 text-rose-300" size={32} />
                <p className="text-rose-400 font-black text-lg uppercase tracking-widest italic">✨ Cartera al día Liliana</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 mb-8 mt-16">
+           <div className="p-2 bg-emerald-50 text-emerald-500 rounded-xl"><Activity size={20} /></div>
+           <h3 className="text-emerald-950 font-black uppercase text-sm tracking-widest">Ingresos del Mes</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {pacientesPagados.map(p => (
+            <div key={`pago-${p.id}`} className="card group hover:shadow-2xl transition-all border-2 border-transparent hover:border-emerald-100 border-l-emerald-500 border-l-4 flex flex-col justify-between p-6">
+              <div>
+                <div className="flex items-center gap-4 mb-6">
+                   <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs group-hover:bg-emerald-600 transition-colors uppercase">{getIniciales(p.nombre)}</div>
+                   <div className="flex-1">
+                     <div className="font-black text-emerald-950 group-hover:text-emerald-600 transition-colors uppercase tracking-tight text-lg">{p.nombre}</div>
+                     <div className="text-[9px] items-center gap-1 text-emerald-500 font-black uppercase tracking-tighter bg-emerald-50 px-2 py-0.5 rounded-full inline-flex border border-emerald-100">
+                       <CreditCard size={10} />
+                       {p.sesiones} pagos
+                     </div>
+                   </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-end mt-4 pt-4 border-t border-emerald-50/50">
+                <div>
+                   <div className="text-emerald-300 text-[9px] uppercase font-black tracking-widest mb-1">Total Recaudado</div>
+                   <div className="text-2xl font-black text-emerald-950 tracking-tighter">{formatCOP(p.totalPagado)}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {pacientesPagados.length === 0 && (
+            <div className="col-span-full py-24 text-center card bg-emerald-50/30 border-dashed border-emerald-200">
+               <Sparkles className="mx-auto mb-4 text-emerald-300" size={32} />
+               <p className="text-emerald-400 font-black text-lg uppercase tracking-widest italic">Aún no hay ingresos este mes</p>
             </div>
           )}
         </div>

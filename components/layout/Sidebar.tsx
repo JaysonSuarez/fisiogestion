@@ -12,13 +12,11 @@ import {
 const navItems = [
   { href: '/',          label: 'Inicio',      icon: LayoutDashboard },
   { href: '/pacientes', label: 'Pacientes',   icon: Users },
-  { href: '/evaluaciones', label: 'Evaluaciones', icon: FileText },
   { href: '/sesiones',  label: 'Planes',      icon: ClipboardList },
   { href: '/agenda',    label: 'Calendario',  icon: CalendarDays },
   { href: '/finanzas',  label: 'Finanzas',    icon: Wallet },
   { href: '/diezmo',    label: 'Diezmo',      icon: Heart },
   { href: '/ajustes',   label: 'Ajustes',     icon: Settings },
-  { href: '/validar-cupon', label: 'Cupón',   icon: Ticket },
 ]
 
 export default function Sidebar() {
