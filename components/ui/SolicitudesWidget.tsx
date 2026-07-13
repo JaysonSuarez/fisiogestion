@@ -74,7 +74,9 @@ export default function SolicitudesWidget() {
         .insert([{
           paciente_id: paciente.id,
           fecha: primeraFecha,
-          duracion_minutos: 60,
+          // duracion_minutos codifica el nº de sesiones del plan (60 min c/u) para
+          // repartir el valor y calcular comisiones correctamente.
+          duracion_minutos: Math.max(60, sorted.length * 60),
           valor: solicitud.precio_total,
           estado_pago: 'pendiente',
         }])

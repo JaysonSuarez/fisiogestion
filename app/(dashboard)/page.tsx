@@ -32,7 +32,7 @@ import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 import NotificationModal from '@/components/ui/NotificationModal'
 import PushManager from '@/components/push/PushManager'
 import { OfflineSync } from '@/lib/offline-sync'
-import { formatCOP, format12h, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr } from '@/lib/utils'
+import { formatCOP, format12h, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr, getMonthDateRange, calcularGananciaLiliana, calcularDiezmo } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -84,9 +84,7 @@ export default function DashboardPage() {
       const isLu = user?.email?.toLowerCase().includes('luisa')
       setIsLuisa(!!isLu)
 
-      const [year, month] = selectedMonth.split('-')
-      const startDate = `${year}-${month}-01`
-      const endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0]
+      const { startDate, endDate } = getMonthDateRange(selectedMonth)
 
       let pacientesActivos = 0
       
@@ -106,7 +104,7 @@ export default function DashboardPage() {
       }
 
       let citasHoyQuery = supabase.from('citas').select('*, pacientes(nombre, telefono)').eq('fecha', todayStr).neq('estado', 'cancelada')
-      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, diezmo_entregado, pacientes(nombre, id)').gte('fecha', startDate).lte('fecha', endDate)
+      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, diezmo_entregado, duracion_minutos, pacientes(nombre, id), citas(fisioterapeuta, estado)').gte('fecha', startDate).lte('fecha', endDate)
       let citasMesQuery = supabase.from('citas').select('duracion_minutos').eq('estado', 'completada').gte('fecha', startDate).lte('fecha', endDate)
       
       if (isLu) {
@@ -128,7 +126,8 @@ export default function DashboardPage() {
 
       const porCobrar = todasSesiones?.reduce((acc, s) => acc + (s.valor - (s.monto_pagado || 0)), 0) || 0
       const ingresoGlobal = todasSesiones?.reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
-      const ingresoDiezmoActual = todasSesiones?.filter(s => !s.diezmo_entregado).reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
+      // Ganancia de Liliana (recaudado − comisión de Luisa) sobre los planes aún no diezmados del mes
+      const gananciaDiezmable = todasSesiones?.filter(s => !s.diezmo_entregado).reduce((acc, s: any) => acc + calcularGananciaLiliana(s), 0) || 0
 
       const deudoresMap: Record<string, { nombre: string, deuda: number }> = {}
       todasSesiones?.forEach(s => {
@@ -148,7 +147,7 @@ export default function DashboardPage() {
         citasHoy: citasHoyRaw || [],
         porCobrar,
         ingresoTotal: ingresoGlobal,
-        diezmoTotal: Math.round(ingresoDiezmoActual * 0.1),
+        diezmoTotal: calcularDiezmo(gananciaDiezmable),
         deudores,
         solicitudesCount: solicitudesCount || 0,
         horasClinicas: Math.round(horasClinicas * 10) / 10

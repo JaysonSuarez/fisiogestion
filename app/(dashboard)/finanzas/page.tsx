@@ -2,12 +2,21 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Wallet, TrendingUp, AlertCircle, X, Loader2, DollarSign, Activity, CheckCircle, CreditCard, Sparkles, Trash2, Calendar } from 'lucide-react'
+import { Wallet, TrendingUp, AlertCircle, X, Loader2, DollarSign, Activity, CheckCircle, CreditCard, Sparkles, Trash2, Calendar, Heart, ChevronDown } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import NotificationModal from '@/components/ui/NotificationModal'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
-import { formatCOP, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr } from '@/lib/utils'
+import {
+  formatCOP,
+  getIniciales,
+  getMesesDisponibles,
+  formatMes,
+  getCurrentMonthStr,
+  getMonthDateRange,
+  getValorPorSesion,
+  calcularDiezmo,
+} from '@/lib/utils'
 
 
 function FinanzasContent() {
@@ -16,19 +25,19 @@ function FinanzasContent() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  
+
   const [sesiones, setSesiones] = useState<any[]>([])
   const [pacientesDeudores, setPacientesDeudores] = useState<any[]>([])
   const [pacientesPagados, setPacientesPagados] = useState<any[]>([])
   const [citasLuisa, setCitasLuisa] = useState<any[]>([])
   const [selectedPatient, setSelectedPatient] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'luisa'>('general')
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr())
-  
+  const [showIngresos, setShowIngresos] = useState(false)
+
   const [idSeleccionado, setIdSeleccionado] = useState('')
   const [montoAbono, setMontoAbono] = useState('')
   const [metodoPago, setMetodoPago] = useState('efectivo')
-  
+
   // Confirmation State
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
 
@@ -51,10 +60,9 @@ function FinanzasContent() {
   async function loadData() {
     try {
       setLoading(true)
-      const [year, month] = selectedMonth.split('-')
-      const startDate = `${year}-${month}-01`
-      const endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0]
+      const { startDate, endDate } = getMonthDateRange(selectedMonth)
 
+      // Planes que inician en el mes seleccionado (unidad de contabilidad del recaudo)
       const { data: todas } = await supabase
         .from('sesiones')
         .select('*, pacientes(nombre)')
@@ -63,6 +71,7 @@ function FinanzasContent() {
 
       setSesiones(todas || [])
 
+      // Pacientes que pagaron algo este mes (ingresos recibidos)
       const pagadosRaw = (todas || []).filter(s => (s.monto_pagado || 0) > 0);
       const agrupadosPagos: Record<string, any> = {}
       pagadosRaw.forEach(s => {
@@ -80,14 +89,14 @@ function FinanzasContent() {
       })
       setPacientesPagados(Object.values(agrupadosPagos).sort((a: any, b: any) => b.totalPagado - a.totalPagado))
 
+      // Deuda: TODAS las sesiones pendientes (independiente del mes), es una lista de pendientes por cobrar
       const { data: pendientes } = await supabase
         .from('sesiones')
         .select('id, paciente_id, valor, monto_pagado, fecha, pacientes(nombre)')
-        // Para la deuda, mostramos todas las sesiones pendientes independientemente del mes
-      
+
       const deudoresRaw = pendientes?.filter(s => (s.monto_pagado || 0) < s.valor) || []
 
-      // Cargar citas de Luisa
+      // Citas que Luisa realizó (completadas) en el mes → comisión del 25%
       const { data: citasLu } = await supabase
         .from('citas')
         .select('id, fecha, pago_terapeuta_control, sesiones(valor, duracion_minutos, pacientes(nombre))')
@@ -96,9 +105,9 @@ function FinanzasContent() {
         .gte('fecha', startDate)
         .lte('fecha', endDate)
         .order('fecha', { ascending: false })
-      
+
       setCitasLuisa(citasLu || [])
-      
+
       const agrupados: Record<string, any> = {}
       deudoresRaw.forEach(s => {
         const p = s.pacientes as any
@@ -141,29 +150,28 @@ function FinanzasContent() {
     }
   }, [selectedMonth])
 
-  const totalProyectado = sesiones.reduce((a, s) => a + s.valor, 0)
-  const totalCobrado = sesiones.reduce((a, s) => a + (s.monto_pagado || 0), 0)
-  const porCobrar = totalProyectado - totalCobrado
-
-  // Cálculos para Luisa
+  // ─── Comisión de Luisa (mes) ────────────────────────────────────────────────
   const citasLuisaProcesadas = citasLuisa.map(c => {
     const s = c.sesiones as any
-    const numSesiones = (s.duracion_minutos || 60) / 60
-    const valorPorCita = s.valor / numSesiones
-    const comision = valorPorCita * 0.25
+    const comision = Math.round(getValorPorSesion({ valor: s.valor, duracion_minutos: s.duracion_minutos }) * 0.25)
     return { ...c, comision, pagado: c.pago_terapeuta_control === 'pagado', nombre: s.pacientes?.nombre }
   })
-  
   const totalComisionLuisa = citasLuisaProcesadas.reduce((a, c) => a + c.comision, 0)
   const comisionPendienteLuisa = citasLuisaProcesadas.filter(c => !c.pagado).reduce((a, c) => a + c.comision, 0)
+
+  // ─── Flujo de dinero del mes ────────────────────────────────────────────────
+  const recaudadoBruto = sesiones.reduce((a, s) => a + (s.monto_pagado || 0), 0)
+  const gananciaLiliana = Math.max(0, recaudadoBruto - totalComisionLuisa)
+  const diezmoEstimado = calcularDiezmo(gananciaLiliana)
+  const carteraPorCobrar = pacientesDeudores.reduce((a, p) => a + p.deudaTotal, 0)
 
   async function handleRegistrarAbono(e: React.FormEvent) {
     e.preventDefault()
     if (!idSeleccionado || !montoAbono || Number(montoAbono) <= 0) return
-    
+
     setSaving(true)
     let montoRestante = Number(montoAbono)
-    
+
     try {
       const { data: pendientes } = await supabase
         .from('sesiones')
@@ -182,8 +190,8 @@ function FinanzasContent() {
 
         const { error: updateError } = await supabase
           .from('sesiones')
-          .update({ 
-            monto_pagado: nuevoMontoPagado, 
+          .update({
+            monto_pagado: nuevoMontoPagado,
             estado_pago: nuevoEstado,
             metodo_pago: metodoPago
           })
@@ -255,15 +263,13 @@ function FinanzasContent() {
         .eq('id', sessionId)
 
       if (deleteError) throw deleteError
-      
+
       setNotification({
         isOpen: true,
         type: 'success',
         title: 'Sesión Eliminada',
         message: 'La sesión ha sido eliminada del historial.'
       })
-      
-      // Update local state if needed (loadData will be called by realtime)
     } catch (err: any) {
       console.error(err)
       setNotification({
@@ -280,8 +286,8 @@ function FinanzasContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4">
-      <NotificationModal 
+    <div className="max-w-5xl mx-auto px-4 pb-20">
+      <NotificationModal
         isOpen={notification.isOpen}
         onClose={() => setNotification(prev => ({...prev, isOpen: false}))}
         type={notification.type}
@@ -289,7 +295,7 @@ function FinanzasContent() {
         message={notification.message}
       />
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={!!sessionToDelete}
         onClose={() => setSessionToDelete(null)}
         onConfirm={() => sessionToDelete && handleDeleteSession(sessionToDelete)}
@@ -297,16 +303,16 @@ function FinanzasContent() {
         message="¿Estás seguro de que deseas eliminar este registro? Esto cancelará la deuda asociada a esta sesión."
       />
 
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
         <div>
           <h2 className="font-display italic text-5xl mb-2 flex items-center gap-3 text-rose-950">
             <Wallet className="text-rose-400" size={36} />
             Finanzas
           </h2>
-          <p className="text-rose-400 font-bold text-xs uppercase tracking-widest italic">Gestión de cartera y abonos</p>
-          
-          <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <select 
+          <p className="text-rose-400 font-bold text-xs uppercase tracking-widest italic">Ganancia real, cartera y comisiones</p>
+
+          <div className="mt-4">
+            <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-full sm:w-auto bg-white border border-rose-100 text-rose-950 font-black rounded-[20px] px-4 py-2 shadow-sm uppercase tracking-widest text-xs outline-none focus:ring-2 focus:ring-rose-200"
@@ -315,59 +321,62 @@ function FinanzasContent() {
                 <option key={m} value={m}>{formatMes(m)}</option>
               ))}
             </select>
+          </div>
+        </div>
+        <button onClick={() => { setIdSeleccionado(''); setIsModalOpen(true) }} className="shrink-0 w-full sm:w-auto p-4 bg-rose-950 text-white rounded-2xl shadow-xl shadow-rose-950/20 hover:bg-rose-900 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+          <Sparkles size={18} />
+          Registrar Abono
+        </button>
+      </header>
 
-            <div className="flex items-center gap-2 bg-rose-50/50 p-1 rounded-full border border-rose-100">
-              <button 
-                onClick={() => setActiveTab('general')}
-                className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'general' ? 'bg-rose-950 text-white shadow-md' : 'text-rose-400 hover:text-rose-600'}`}
-              >
-                General
-              </button>
-              <button 
-                onClick={() => setActiveTab('luisa')}
-                className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'luisa' ? 'bg-rose-950 text-white shadow-md' : 'text-rose-400 hover:text-rose-600'}`}
-              >
-                Comisiones Luisa
-              </button>
+      {/* ── TARJETA HÉROE: FLUJO DE DINERO DEL MES ── */}
+      <section className="card border-none shadow-[0_24px_60px_-16px_rgba(225,29,72,0.25)] bg-rose-950 text-white p-8 sm:p-10 relative overflow-hidden mb-8 rounded-[36px]">
+        <div className="absolute -right-8 -bottom-8 text-white/5">
+          <Heart size={200} fill="currentColor" />
+        </div>
+        <div className="relative z-10">
+          <span className="text-[10px] font-black text-rose-300 uppercase tracking-[0.3em] block mb-6">Ganancia de Liliana · {formatMes(selectedMonth)}</span>
+
+          <div className="space-y-3 mb-8 max-w-md">
+            <div className="flex items-center justify-between text-rose-100/80">
+              <span className="text-xs font-bold uppercase tracking-widest">Recaudado (bruto)</span>
+              <span className="text-lg font-black">{formatCOP(recaudadoBruto)}</span>
+            </div>
+            <div className="flex items-center justify-between text-amber-300">
+              <span className="text-xs font-bold uppercase tracking-widest">− Comisión de Luisa</span>
+              <span className="text-lg font-black">−{formatCOP(totalComisionLuisa)}</span>
+            </div>
+            <div className="h-px bg-white/10" />
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-black uppercase tracking-widest text-white">= Tu ganancia</span>
+              <span className="text-3xl sm:text-4xl font-black tracking-tighter text-white">{formatCOP(gananciaLiliana)}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 max-w-md">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <span className="text-[9px] font-black text-rose-300 uppercase tracking-widest block mb-1 flex items-center gap-1">Diezmo (10%) <Sparkles size={10} /></span>
+              <span className="text-lg font-black text-white">{formatCOP(diezmoEstimado)}</span>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <span className="text-[9px] font-black text-rose-300 uppercase tracking-widest block mb-1">Por cobrar (cartera)</span>
+              <span className="text-lg font-black text-white">{formatCOP(carteraPorCobrar)}</span>
             </div>
           </div>
         </div>
-        {activeTab === 'general' && (
-          <button onClick={() => setIsModalOpen(true)} className="shrink-0 w-full sm:w-auto p-4 bg-rose-950 text-white rounded-2xl shadow-xl shadow-rose-950/20 hover:bg-rose-900 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
-            <Sparkles size={18} />
-            Registrar Abono
-          </button>
-        )}
-      </header>
-
-      {activeTab === 'general' ? (
-        <>
-          <section className="metric-grid gap-4 sm:gap-6">
-        <div className="card metric-card border-none shadow-lg shadow-rose-100/20">
-          <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Total Proyectado</span>
-          <div className="text-lg sm:text-xl font-black text-rose-950">{formatCOP(totalProyectado)}</div>
-        </div>
-
-        <div className="card metric-card bg-rose-600 border-none shadow-xl shadow-rose-200 group text-white">
-          <span className="text-[10px] font-black text-rose-100 uppercase tracking-widest block mb-1">Total Recaudado</span>
-          <div className="text-xl font-black">{formatCOP(totalCobrado)}</div>
-          <TrendingUp className="absolute right-4 bottom-4 text-white/10 group-hover:scale-125 transition-transform" size={48} />
-        </div>
-
-        <div className="card metric-card bg-rose-50 border-none shadow-lg shadow-rose-100/20 group">
-          <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-1">Por Cobrar</span>
-          <div className="text-xl font-black text-rose-600">{formatCOP(porCobrar)}</div>
-          <AlertCircle className="absolute right-4 bottom-4 text-rose-500/10 group-hover:scale-125 transition-transform" size={48} />
-        </div>
       </section>
 
-      <div className="mt-12">
-        <div className="flex items-center gap-3 mb-8">
-           <div className="p-2 bg-rose-50 text-rose-500 rounded-xl"><Activity size={20} /></div>
-           <h3 className="text-rose-950 font-black uppercase text-sm tracking-widest">Pacientes con Deuda</h3>
+      {/* ── CARTERA POR COBRAR ── */}
+      <div className="mb-14">
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-rose-50 text-rose-500 rounded-xl"><AlertCircle size={20} /></div>
+            <h3 className="text-rose-950 font-black uppercase text-sm tracking-widest">Cartera por Cobrar</h3>
+          </div>
+          <span className="text-[10px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-3 py-1.5 rounded-full uppercase tracking-widest">{formatCOP(carteraPorCobrar)}</span>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pacientesDeudores.map(p => (
             <div key={p.id} className="card group hover:shadow-2xl transition-all border-2 border-transparent hover:border-rose-100 border-l-rose-500 border-l-4 flex flex-col justify-between p-6">
               <div>
@@ -382,14 +391,14 @@ function FinanzasContent() {
                    </div>
                 </div>
               </div>
-              
+
               <div className="flex justify-between items-end mt-4 pt-4 border-t border-rose-50/50">
                 <div>
                    <div className="text-rose-300 text-[9px] uppercase font-black tracking-widest mb-1">Deuda pendiente</div>
                    <div className="text-2xl font-black text-rose-950 tracking-tighter">{formatCOP(p.deudaTotal)}</div>
                 </div>
                 <div className="flex gap-2">
-                   <button 
+                   <button
                     onClick={() => {
                       setSelectedPatient(p)
                       setIsDetailModalOpen(true)
@@ -399,7 +408,7 @@ function FinanzasContent() {
                   >
                     <Trash2 size={16} />
                   </button>
-                  <button 
+                  <button
                     onClick={() => {
                       setIdSeleccionado(p.id)
                       setIsModalOpen(true)
@@ -414,23 +423,95 @@ function FinanzasContent() {
             </div>
           ))}
           {pacientesDeudores.length === 0 && (
-            <div className="col-span-full py-24 text-center card bg-rose-50/30 border-dashed border-rose-200">
+            <div className="col-span-full py-20 text-center card bg-rose-50/30 border-dashed border-rose-200">
                <Sparkles className="mx-auto mb-4 text-rose-300" size={32} />
-               <p className="text-rose-400 font-black text-lg uppercase tracking-widest italic">✨ Cartera al día Liliana</p>
+               <p className="text-rose-400 font-black text-lg uppercase tracking-widest italic">✨ Cartera al día</p>
             </div>
           )}
         </div>
+      </div>
 
-        <div className="flex items-center gap-3 mb-8 mt-16">
-           <div className="p-2 bg-emerald-50 text-emerald-500 rounded-xl"><Activity size={20} /></div>
-           <h3 className="text-emerald-950 font-black uppercase text-sm tracking-widest">Ingresos del Mes</h3>
+      {/* ── COMISIONES DE LUISA ── */}
+      <div className="mb-14">
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-50 text-amber-500 rounded-xl"><Activity size={20} /></div>
+            <h3 className="text-rose-950 font-black uppercase text-sm tracking-widest">Comisiones de Luisa · {formatMes(selectedMonth)}</h3>
+          </div>
+          {comisionPendienteLuisa > 0 && (
+            <button
+              onClick={handlePagarLuisa}
+              disabled={saving}
+              className="px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 font-black text-[10px] uppercase tracking-[0.2em] rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              Pagar {formatCOP(comisionPendienteLuisa)}
+            </button>
+          )}
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {pacientesPagados.map(p => (
-            <div key={`pago-${p.id}`} className="card group hover:shadow-2xl transition-all border-2 border-transparent hover:border-emerald-100 border-l-emerald-500 border-l-4 flex flex-col justify-between p-6">
-              <div>
-                <div className="flex items-center gap-4 mb-6">
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+          <div className="card p-5 border-none shadow-lg shadow-rose-100/20">
+            <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Sesiones (mes)</span>
+            <div className="text-xl font-black text-rose-950">{citasLuisa.length}</div>
+          </div>
+          <div className="card p-5 border-none shadow-lg shadow-amber-100/20 bg-amber-50/50">
+            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest block mb-1">Comisión total</span>
+            <div className="text-xl font-black text-amber-600">{formatCOP(totalComisionLuisa)}</div>
+          </div>
+          <div className="card p-5 border-none shadow-lg shadow-rose-100/20 col-span-2 sm:col-span-1">
+            <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-1">Por pagar</span>
+            <div className="text-xl font-black text-rose-600">{formatCOP(comisionPendienteLuisa)}</div>
+          </div>
+        </div>
+
+        <div className="card p-6 shadow-xl shadow-rose-100/20 border-2 border-rose-50">
+           <div className="space-y-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-2">
+              {citasLuisaProcesadas.map((c) => (
+                <div key={c.id} className="p-4 bg-rose-50/30 rounded-[20px] border border-rose-100 flex items-center justify-between group hover:bg-rose-50 transition-colors">
+                   <div>
+                      <div className="text-xs font-black text-rose-950 uppercase tracking-tight">{c.nombre}</div>
+                      <div className="text-[10px] font-bold text-rose-400 mt-1">{c.fecha}</div>
+                   </div>
+                   <div className="flex items-center gap-4">
+                      <div className="text-right">
+                         <div className="text-xs font-black text-amber-600">{formatCOP(c.comision)}</div>
+                         <div className="text-[8px] font-bold text-rose-300 uppercase tracking-widest">25% comisión</div>
+                      </div>
+                      <span className={`badge !text-[8px] !font-black !px-2 !py-1 !rounded-md uppercase ${c.pagado ? '!bg-emerald-50 !text-emerald-500 border border-emerald-100' : '!bg-rose-100 !text-rose-600 border border-rose-200'}`}>
+                         {c.pagado ? 'Pagado' : 'Pendiente'}
+                      </span>
+                   </div>
+                </div>
+              ))}
+              {citasLuisaProcesadas.length === 0 && (
+                <div className="py-12 text-center opacity-50">
+                  <Calendar className="mx-auto mb-3 text-rose-300" size={32} />
+                  <p className="text-rose-400 font-black text-[10px] uppercase tracking-[0.2em]">Luisa no realizó sesiones este mes.</p>
+                </div>
+              )}
+           </div>
+        </div>
+      </div>
+
+      {/* ── INGRESOS RECIBIDOS (colapsable) ── */}
+      <div className="mb-8">
+        <button
+          onClick={() => setShowIngresos(v => !v)}
+          className="w-full flex items-center justify-between gap-3 mb-2 p-2 rounded-xl hover:bg-emerald-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 text-emerald-500 rounded-xl"><TrendingUp size={20} /></div>
+            <h3 className="text-emerald-950 font-black uppercase text-sm tracking-widest">Ingresos Recibidos · {formatMes(selectedMonth)}</h3>
+          </div>
+          <ChevronDown size={20} className={`text-emerald-400 transition-transform ${showIngresos ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showIngresos && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            {pacientesPagados.map(p => (
+              <div key={`pago-${p.id}`} className="card group hover:shadow-2xl transition-all border-2 border-transparent hover:border-emerald-100 border-l-emerald-500 border-l-4 flex flex-col justify-between p-6">
+                <div className="flex items-center gap-4 mb-4">
                    <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs group-hover:bg-emerald-600 transition-colors uppercase">{getIniciales(p.nombre)}</div>
                    <div className="flex-1">
                      <div className="font-black text-emerald-950 group-hover:text-emerald-600 transition-colors uppercase tracking-tight text-lg">{p.nombre}</div>
@@ -440,89 +521,21 @@ function FinanzasContent() {
                      </div>
                    </div>
                 </div>
-              </div>
-              
-              <div className="flex justify-between items-end mt-4 pt-4 border-t border-emerald-50/50">
-                <div>
+                <div className="pt-4 border-t border-emerald-50/50">
                    <div className="text-emerald-300 text-[9px] uppercase font-black tracking-widest mb-1">Total Recaudado</div>
                    <div className="text-2xl font-black text-emerald-950 tracking-tighter">{formatCOP(p.totalPagado)}</div>
                 </div>
               </div>
-            </div>
-          ))}
-          {pacientesPagados.length === 0 && (
-            <div className="col-span-full py-24 text-center card bg-emerald-50/30 border-dashed border-emerald-200">
-               <Sparkles className="mx-auto mb-4 text-emerald-300" size={32} />
-               <p className="text-emerald-400 font-black text-lg uppercase tracking-widest italic">Aún no hay ingresos este mes</p>
-            </div>
-          )}
-        </div>
-      </div>
-      </>
-      ) : (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
-          <section className="metric-grid gap-4 sm:gap-6">
-            <div className="card metric-card border-none shadow-lg shadow-rose-100/20">
-              <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Citas Completadas (Mes)</span>
-              <div className="text-lg sm:text-xl font-black text-rose-950">{citasLuisa.length}</div>
-            </div>
-
-            <div className="card metric-card bg-rose-600 border-none shadow-xl shadow-rose-200 group text-white">
-              <span className="text-[10px] font-black text-rose-100 uppercase tracking-widest block mb-1">Comisión Total ({formatMes(selectedMonth)})</span>
-              <div className="text-xl font-black">{formatCOP(totalComisionLuisa)}</div>
-              <Activity className="absolute right-4 bottom-4 text-white/10 group-hover:scale-125 transition-transform" size={48} />
-            </div>
-
-            <div className="card metric-card bg-rose-50 border-none shadow-lg shadow-rose-100/20 group">
-              <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-1">Por Pagar a Luisa</span>
-              <div className="text-xl font-black text-rose-600">{formatCOP(comisionPendienteLuisa)}</div>
-              <AlertCircle className="absolute right-4 bottom-4 text-rose-500/10 group-hover:scale-125 transition-transform" size={48} />
-            </div>
-          </section>
-
-          <div className="card p-8 shadow-xl shadow-rose-100/20 border-2 border-rose-50 relative overflow-hidden">
-             <div className="flex-between mb-6">
-                <h3 className="font-black text-rose-950 uppercase text-sm tracking-widest">Detalle de Sesiones</h3>
-                {comisionPendienteLuisa > 0 && (
-                  <button 
-                    onClick={handlePagarLuisa}
-                    disabled={saving}
-                    className="px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 font-black text-[10px] uppercase tracking-[0.2em] rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                    Marcar como pagado
-                  </button>
-                )}
-             </div>
-             
-             <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
-                {citasLuisaProcesadas.map((c) => (
-                  <div key={c.id} className="p-4 bg-rose-50/30 rounded-[20px] border border-rose-100 flex items-center justify-between group hover:bg-rose-50 transition-colors">
-                     <div>
-                        <div className="text-xs font-black text-rose-950 uppercase tracking-tight">{c.nombre}</div>
-                        <div className="text-[10px] font-bold text-rose-400 mt-1">{c.fecha}</div>
-                     </div>
-                     <div className="flex items-center gap-4">
-                        <div className="text-right">
-                           <div className="text-xs font-black text-rose-600">{formatCOP(c.comision)}</div>
-                           <div className="text-[8px] font-bold text-rose-300 uppercase tracking-widest">25% comisión</div>
-                        </div>
-                        <span className={`badge !text-[8px] !font-black !px-2 !py-1 !rounded-md uppercase ${c.pagado ? '!bg-emerald-50 !text-emerald-500 border border-emerald-100' : '!bg-rose-100 !text-rose-600 border border-rose-200'}`}>
-                           {c.pagado ? 'Pagado' : 'Pendiente'}
-                        </span>
-                     </div>
-                  </div>
-                ))}
-                {citasLuisaProcesadas.length === 0 && (
-                  <div className="py-12 text-center opacity-50">
-                    <Calendar className="mx-auto mb-3 text-rose-300" size={32} />
-                    <p className="text-rose-400 font-black text-[10px] uppercase tracking-[0.2em]">No hay citas completadas en este mes.</p>
-                  </div>
-                )}
-             </div>
+            ))}
+            {pacientesPagados.length === 0 && (
+              <div className="col-span-full py-16 text-center card bg-emerald-50/30 border-dashed border-emerald-200">
+                 <Sparkles className="mx-auto mb-4 text-emerald-300" size={32} />
+                 <p className="text-emerald-400 font-black text-lg uppercase tracking-widest italic">Aún no hay ingresos este mes</p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Modal Registrar Pago */}
       {isModalOpen && (
@@ -532,11 +545,11 @@ function FinanzasContent() {
               <h3 className="font-black text-xl text-rose-950 uppercase tracking-tighter">Registrar Pago</h3>
               <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white shadow-sm text-rose-300 hover:text-rose-500 transition-colors"><X size={20} /></button>
             </div>
-            
+
             <form onSubmit={handleRegistrarAbono} className="p-8 space-y-6">
               <div className="form-group">
                 <label className="text-[10px] font-black text-rose-300 uppercase tracking-widest mb-3 block">Paciente</label>
-                <select 
+                <select
                   className="w-full px-5 py-4 rounded-2xl border-2 border-rose-50 focus:border-rose-400 outline-none font-bold text-rose-900 bg-rose-50/30 transition-all appearance-none cursor-pointer text-sm"
                   value={idSeleccionado}
                   onChange={(e) => setIdSeleccionado(e.target.value)}
@@ -551,8 +564,8 @@ function FinanzasContent() {
                 <label className="text-[10px] font-black text-rose-300 uppercase tracking-widest mb-3 block">Valor del abono</label>
                 <div className="relative">
                   <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-rose-200">$</span>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={montoAbono}
                     onChange={(e) => setMontoAbono(e.target.value)}
                     className="w-full pl-12 pr-6 py-5 rounded-2xl border-2 border-rose-50 focus:border-rose-400 outline-none font-black text-4xl text-rose-900 bg-rose-50/30 transition-all placeholder:text-rose-100"
@@ -601,7 +614,7 @@ function FinanzasContent() {
                 </div>
                 <button onClick={() => setIsDetailModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white shadow-sm text-rose-300 hover:text-rose-500 transition-colors"><X size={20} /></button>
               </div>
-              
+
               <div className="p-8 max-h-[400px] overflow-y-auto space-y-4 custom-scrollbar">
                  {selectedPatient.detalleSesiones.map((s: any) => (
                     <div key={s.id} className="card p-5 border border-rose-50 hover:border-rose-200 transition-all group">
@@ -611,11 +624,11 @@ function FinanzasContent() {
                                 <Calendar size={20} />
                              </div>
                              <div>
-                                <div className="text-xs font-black text-rose-950 uppercase tracking-tight">{new Date(s.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}</div>
+                                <div className="text-xs font-black text-rose-950 uppercase tracking-tight">{new Date(s.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}</div>
                                 <div className="text-[10px] font-black text-rose-300 uppercase tracking-widest">{formatCOP(s.valor)} — Pendiente</div>
                              </div>
                           </div>
-                          <button 
+                          <button
                             onClick={() => setSessionToDelete(s.id)}
                             className="p-3 text-rose-200 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
                             title="Eliminar esta sesión"
@@ -629,9 +642,9 @@ function FinanzasContent() {
                    <p className="text-center py-10 text-rose-300 font-bold text-sm">No hay sesiones pendientes.</p>
                  )}
               </div>
-              
+
               <div className="p-8 border-t border-rose-50 bg-rose-50/10">
-                 <button 
+                 <button
                   onClick={() => {
                     setIsDetailModalOpen(false)
                     setIdSeleccionado(selectedPatient.id)

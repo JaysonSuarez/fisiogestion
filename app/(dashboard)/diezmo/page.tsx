@@ -4,15 +4,14 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { TrendingUp, CheckCircle, AlertCircle, Wallet, Info, Loader2, Heart, Sparkles, Check } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
-
-const formatCOP = (valor: number) => {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
-}
+import { formatCOP, calcularComisionLuisa, calcularGananciaLiliana, calcularDiezmo } from '@/lib/utils'
 
 export default function DiezmoPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
-  const [totalIngreso, setTotalIngreso] = useState(0)
+  const [recaudadoBruto, setRecaudadoBruto] = useState(0)
+  const [comisionLuisa, setComisionLuisa] = useState(0)
+  const [gananciaLiliana, setGananciaLiliana] = useState(0)
   const [totalDiezmo, setTotalDiezmo] = useState(0)
   
   // Notification State
@@ -25,14 +24,22 @@ export default function DiezmoPage() {
 
   async function loadTotals() {
     try {
+      // Traemos los planes no entregados junto con sus citas (para saber quién realizó
+      // cada sesión y descontar la comisión de Luisa antes de calcular el diezmo).
       const { data } = await supabase
         .from('sesiones')
-        .select('monto_pagado')
+        .select('valor, monto_pagado, duracion_minutos, citas(fisioterapeuta, estado)')
         .eq('diezmo_entregado', false)
-      
-      const ingreso = data?.reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
-      setTotalIngreso(ingreso)
-      setTotalDiezmo(Math.round(ingreso * 0.1))
+
+      const planes = data || []
+      const bruto = planes.reduce((acc, s: any) => acc + (s.monto_pagado || 0), 0)
+      const comision = planes.reduce((acc, s: any) => acc + calcularComisionLuisa(s), 0)
+      const ganancia = planes.reduce((acc, s: any) => acc + calcularGananciaLiliana(s), 0)
+
+      setRecaudadoBruto(bruto)
+      setComisionLuisa(comision)
+      setGananciaLiliana(ganancia)
+      setTotalDiezmo(calcularDiezmo(ganancia))
     } finally {
       setLoading(false)
     }
@@ -137,8 +144,9 @@ export default function DiezmoPage() {
             <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mb-6">
               <TrendingUp size={24} />
             </div>
-            <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-2">Ingresos Consolidados</span>
-            <div className="text-4xl font-black text-rose-950 tracking-tighter">{formatCOP(totalIngreso)}</div>
+            <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-2">Ganancia de Liliana</span>
+            <div className="text-4xl font-black text-rose-950 tracking-tighter">{formatCOP(gananciaLiliana)}</div>
+            <p className="text-[9px] font-bold text-rose-300 uppercase tracking-widest mt-2 italic">Recaudado menos la comisión de Luisa</p>
           </div>
         </div>
 
@@ -165,20 +173,29 @@ export default function DiezmoPage() {
           </div>
           
           <div className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-rose-50/30 rounded-2xl border border-rose-100/50">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-rose-400 font-bold text-xs">10%</div>
-                <span className="text-sm font-bold text-rose-800">Porcentaje establecido</span>
+            {/* Flujo del dinero: recaudado → comisión Luisa → ganancia → diezmo */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="text-sm font-bold text-slate-700">Recaudado (bruto)</span>
+                <span className="text-base font-black text-slate-800">{formatCOP(recaudadoBruto)}</span>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-amber-50/60 rounded-2xl border border-amber-100">
+                <span className="text-sm font-bold text-amber-700">− Comisión de Luisa (25%)</span>
+                <span className="text-base font-black text-amber-600">−{formatCOP(comisionLuisa)}</span>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-rose-50/60 rounded-2xl border border-rose-100">
+                <span className="text-sm font-black text-rose-800">= Ganancia de Liliana</span>
+                <span className="text-base font-black text-rose-700">{formatCOP(gananciaLiliana)}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Base Gravable</span>
-                <span className="text-lg font-bold text-slate-800">{formatCOP(totalIngreso)}</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Base del diezmo</span>
+                <span className="text-lg font-bold text-slate-800">{formatCOP(gananciaLiliana)}</span>
               </div>
               <div className="p-6 rounded-3xl bg-rose-50/50 border border-rose-100">
-                <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest block mb-2">Total a Apartar</span>
+                <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest block mb-2">Total a Apartar (10%)</span>
                 <span className="text-lg font-black text-rose-600">{formatCOP(totalDiezmo)}</span>
               </div>
             </div>

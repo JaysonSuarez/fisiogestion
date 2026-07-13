@@ -177,9 +177,11 @@ export default function SesionesPage() {
   const savePlanChanges = async () => {
     setSaving(true)
     try {
+      // Mantener duracion_minutos sincronizado con el nº real de citas del plan
+      // (se usa como nº de sesiones para repartir el valor y calcular comisiones/horas).
       const { error: sessionError } = await supabase
         .from('sesiones')
-        .update({ valor: localValor })
+        .update({ valor: localValor, duracion_minutos: Math.max(60, localCitas.length * 60) })
         .eq('id', selectedPlan.id)
 
       if (sessionError) throw sessionError
