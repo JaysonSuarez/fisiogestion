@@ -304,6 +304,65 @@ function FinanzasContent() {
     }
   }
 
+  // Alterna el estado de pago de una comisión (pagado ↔ pendiente).
+  // Permite corregir cuando se marcó como pagado sin haberse pagado.
+  async function handleToggleComisionLuisa(citaId: string, currentlyPaid: boolean) {
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('citas')
+        .update({ pago_terapeuta_control: currentlyPaid ? 'pendiente' : 'pagado' })
+        .eq('id', citaId)
+
+      if (error) throw error
+      loadData()
+    } catch (err) {
+      console.error(err)
+      setNotification({
+        isOpen: true,
+        type: 'error',
+        title: 'Error de Red',
+        message: 'No pudimos actualizar el estado de la comisión.'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Revierte todas las comisiones pagadas del mes a "pendiente".
+  async function handleRevertirLuisa() {
+    const idsPagados = citasLuisaProcesadas.filter(c => c.pagado).map(c => c.id)
+    if (idsPagados.length === 0) return
+
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('citas')
+        .update({ pago_terapeuta_control: 'pendiente' })
+        .in('id', idsPagados)
+
+      if (error) throw error
+
+      setNotification({
+        isOpen: true,
+        type: 'success',
+        title: 'Pagos Revertidos',
+        message: 'Las comisiones de Luisa volvieron a estado pendiente.'
+      })
+      loadData()
+    } catch (err) {
+      console.error(err)
+      setNotification({
+        isOpen: true,
+        type: 'error',
+        title: 'Error de Red',
+        message: 'No pudimos revertir los pagos.'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleDeleteSession(sessionId: string) {
     try {
       const { error: deleteError } = await supabase
@@ -379,7 +438,7 @@ function FinanzasContent() {
       </header>
 
       {/* ── TARJETA HÉROE: FLUJO DE DINERO DEL MES ── */}
-      <section className="card border-none shadow-[0_24px_60px_-16px_rgba(225,29,72,0.25)] bg-rose-950 text-white p-8 sm:p-10 relative overflow-hidden mb-8 rounded-[36px]">
+      <section className="card border-none shadow-[0_24px_60px_-16px_rgba(225,29,72,0.25)] !bg-rose-950 text-white p-8 sm:p-10 relative overflow-hidden mb-8 rounded-[36px]">
         <div className="absolute -right-8 -bottom-8 text-white/5">
           <Heart size={200} fill="currentColor" />
         </div>
@@ -487,7 +546,7 @@ function FinanzasContent() {
             <div className="p-2 bg-amber-50 text-amber-500 rounded-xl"><Activity size={20} /></div>
             <h3 className="text-rose-950 font-black uppercase text-sm tracking-widest">Comisiones de Luisa · {formatMes(selectedMonth)}</h3>
           </div>
-          {comisionPendienteLuisa > 0 && (
+          {comisionPendienteLuisa > 0 ? (
             <button
               onClick={handlePagarLuisa}
               disabled={saving}
@@ -496,7 +555,16 @@ function FinanzasContent() {
               {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
               Pagar {formatCOP(comisionPendienteLuisa)}
             </button>
-          )}
+          ) : citasLuisaProcesadas.some(c => c.pagado) ? (
+            <button
+              onClick={handleRevertirLuisa}
+              disabled={saving}
+              className="px-4 py-2 bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100 font-black text-[10px] uppercase tracking-[0.2em] rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+              Revertir pagos
+            </button>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
@@ -527,9 +595,14 @@ function FinanzasContent() {
                          <div className="text-xs font-black text-amber-600">{formatCOP(c.comision)}</div>
                          <div className="text-[8px] font-bold text-rose-300 uppercase tracking-widest">25% comisión</div>
                       </div>
-                      <span className={`badge !text-[8px] !font-black !px-2 !py-1 !rounded-md uppercase ${c.pagado ? '!bg-emerald-50 !text-emerald-500 border border-emerald-100' : '!bg-rose-100 !text-rose-600 border border-rose-200'}`}>
+                      <button
+                        onClick={() => handleToggleComisionLuisa(c.id, c.pagado)}
+                        disabled={saving}
+                        title={c.pagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
+                        className={`badge !text-[8px] !font-black !px-2 !py-1 !rounded-md uppercase cursor-pointer hover:opacity-70 transition-opacity disabled:opacity-50 ${c.pagado ? '!bg-emerald-50 !text-emerald-500 border border-emerald-100' : '!bg-rose-100 !text-rose-600 border border-rose-200'}`}
+                      >
                          {c.pagado ? 'Pagado' : 'Pendiente'}
-                      </span>
+                      </button>
                    </div>
                 </div>
               ))}

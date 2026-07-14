@@ -31,6 +31,9 @@ export default function SesionesPage() {
     message: ''
   })
 
+  // Delete plan State
+  const [planToDelete, setPlanToDelete] = useState<string | null>(null)
+
   async function loadSesiones() {
     try {
       setLoading(true)
@@ -128,7 +131,9 @@ export default function SesionesPage() {
   const openEditModal = (plan: any) => {
     setSelectedPlan(plan)
     setLocalValor(plan.valor)
-    const sortedCitas = [...(plan.citas || [])].sort((a, b) => a.fecha.localeCompare(b.fecha))
+    const sortedCitas = [...(plan.citas || [])]
+      .sort((a, b) => a.fecha.localeCompare(b.fecha))
+      .map(c => ({ ...c, hora_inicio: (c.hora_inicio || '08:00').slice(0, 5) }))
     setLocalCitas(sortedCitas)
     setIsEditModalOpen(true)
   }
@@ -166,6 +171,10 @@ export default function SesionesPage() {
     setLocalCitas(localCitas.map(c => c.id === id ? { ...c, fecha: newDate } : c))
   }
 
+  const handleUpdateCitaHora = (id: string, hora: string) => {
+    setLocalCitas(localCitas.map(c => c.id === id ? { ...c, hora_inicio: hora } : c))
+  }
+
   const handleUpdateCitaFisioterapeuta = (id: string, fisio: string) => {
     setLocalCitas(localCitas.map(c => c.id === id ? { ...c, fisioterapeuta: fisio } : c))
   }
@@ -177,6 +186,19 @@ export default function SesionesPage() {
   // Revertir una sesión marcada como completada por error (vuelve a pendiente).
   const handleUncompleteLocalSession = (id: string) => {
     setLocalCitas(localCitas.map(c => c.id === id ? { ...c, estado: 'pendiente' } : c))
+  }
+
+  const handleDeletePlan = async () => {
+    if (!planToDelete) return
+    const { error } = await supabase.from('sesiones').delete().eq('id', planToDelete)
+    setPlanToDelete(null)
+    setIsEditModalOpen(false)
+    if (error) {
+      setNotification({ isOpen: true, type: 'error', title: 'Error al Eliminar', message: 'No se pudo eliminar el plan. Intenta de nuevo.' })
+    } else {
+      setNotification({ isOpen: true, type: 'success', title: 'Plan Eliminado', message: 'El plan y todas sus sesiones han sido eliminados.' })
+      loadSesiones()
+    }
   }
 
   const savePlanChanges = async () => {
@@ -204,6 +226,7 @@ export default function SesionesPage() {
       for (const c of toUpdate) {
         await supabase.from('citas').update({
           fecha: c.fecha,
+          hora_inicio: c.hora_inicio,
           estado: c.estado,
           fisioterapeuta: c.fisioterapeuta || 'Liliana',
           // Reiniciar avisos para que el cron notifique con la fecha/hora nueva
@@ -254,12 +277,20 @@ export default function SesionesPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 pb-20">
-      <NotificationModal 
+      <NotificationModal
         isOpen={notification.isOpen}
         onClose={() => setNotification(prev => ({...prev, isOpen: false}))}
         type={notification.type}
         title={notification.title}
         message={notification.message}
+      />
+
+      <ConfirmModal
+        isOpen={!!planToDelete}
+        onClose={() => setPlanToDelete(null)}
+        onConfirm={handleDeletePlan}
+        title="¿Eliminar plan completo?"
+        message="Se eliminará el plan y todas sus sesiones programadas. Esta acción no se puede deshacer."
       />
 
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
@@ -443,11 +474,17 @@ export default function SesionesPage() {
                             <div className="w-10 h-10 rounded-xl bg-white text-rose-500 flex items-center justify-center font-black text-xs shadow-sm">
                                {idx + 1}
                             </div>
-                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                               <input 
+                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                               <input
                                  type="date"
                                  value={cita.fecha}
                                  onChange={(e) => handleUpdateCitaDate(cita.id, e.target.value)}
+                                 className="bg-white px-3 py-2 rounded-xl text-xs font-black text-rose-950 border border-rose-100 outline-none focus:border-rose-300 w-full"
+                               />
+                               <input
+                                 type="time"
+                                 value={cita.hora_inicio}
+                                 onChange={(e) => handleUpdateCitaHora(cita.id, e.target.value)}
                                  className="bg-white px-3 py-2 rounded-xl text-xs font-black text-rose-950 border border-rose-100 outline-none focus:border-rose-300 w-full"
                                />
                                <select
@@ -493,20 +530,28 @@ export default function SesionesPage() {
                  </div>
               </div>
 
-              <div className="p-8 bg-rose-50/30 border-t border-rose-50 flex gap-4">
-                 <button 
-                   onClick={() => setIsEditModalOpen(false)}
-                   className="flex-1 py-4 bg-white text-rose-300 border border-rose-100 rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-50 transition-all active:scale-95"
+              <div className="p-8 bg-rose-50/30 border-t border-rose-50 space-y-3">
+                 <div className="flex gap-4">
+                    <button
+                      onClick={() => setIsEditModalOpen(false)}
+                      className="flex-1 py-4 bg-white text-rose-300 border border-rose-100 rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-50 transition-all active:scale-95"
+                    >
+                       Cancelar
+                    </button>
+                    <button
+                      onClick={savePlanChanges}
+                      disabled={saving}
+                      className="flex-[2] py-4 bg-rose-950 text-white rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-rose-950/10 hover:bg-rose-900 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                       {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                       {saving ? 'Guardando...' : 'Guardar Cambios'}
+                    </button>
+                 </div>
+                 <button
+                   onClick={() => setPlanToDelete(selectedPlan.id)}
+                   className="w-full py-3 bg-red-50 text-red-400 border border-red-100 rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-red-100 hover:text-red-600 transition-all active:scale-95 flex items-center justify-center gap-2"
                  >
-                    Cancelar
-                 </button>
-                 <button 
-                   onClick={savePlanChanges}
-                   disabled={saving}
-                   className="flex-[2] py-4 bg-rose-950 text-white rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-rose-950/10 hover:bg-rose-900 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
-                 >
-                    {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                    {saving ? 'Guardando...' : 'Guardar Cambios'}
+                    <Trash2 size={14} /> Eliminar Plan Completo
                  </button>
               </div>
            </div>

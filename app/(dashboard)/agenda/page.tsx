@@ -212,8 +212,15 @@ export default function AgendaPage() {
     }
   }
 
+  // Un slot solo está ocupado si la MISMA terapeuta ya tiene cita ahí.
+  // Liliana y Luisa pueden coincidir en la misma hora.
   const slotOcupado = (hora: string) => {
-    return dayCitas.some(c => c.id !== selectedCita?.id && c.hora_inicio.split(':')[0] === hora.split(':')[0])
+    const fisio = selectedCita?.fisioterapeuta || 'Liliana'
+    return dayCitas.some(c =>
+      c.id !== selectedCita?.id &&
+      c.hora_inicio.split(':')[0] === hora.split(':')[0] &&
+      (c.fisioterapeuta || 'Liliana') === fisio
+    )
   }
 
   // Reprogramar: reinicia banderas de notificación para que el cron avise con la hora nueva
@@ -346,27 +353,36 @@ export default function AgendaPage() {
                       const laborales = horasLaborales(d.fecha)
                       const isWorkingHour = laborales.includes(hora)
 
-                      const cita = citas.find(c =>
+                      // Todas las citas de la franja: si Liliana y Luisa coinciden en la
+                      // misma hora, se muestran ambas apiladas en la celda.
+                      const citasSlot = citas.filter(c =>
                         c.fecha === d.fecha &&
                         c.hora_inicio.split(':')[0] === hora.split(':')[0] &&
                         c.estado !== 'cancelada'
                       )
-                      if (cita) {
-                        const p = cita.pacientes as any
-                        const sessionInfo = cita.notas?.split('.')[0]
-                        const isCompleted = esCompletada(cita.estado)
+                      if (citasSlot.length > 0) {
+                        const multi = citasSlot.length > 1
                         return (
-                          <div key={`${d.fecha}-${hora}`} className="h-12 sm:h-20 p-[1px] sm:p-0.5">
-                            <button onClick={() => openPanel(cita)} className={`h-full w-full text-left rounded-[8px] sm:rounded-[20px] p-0.5 sm:p-2 flex flex-col justify-center cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg shadow-rose-100/20 group relative overflow-hidden ${isCompleted ? 'bg-lime-50 border border-lime-100 shadow-lime-100/30' : 'bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
-                              <div className="absolute top-0 right-0 p-0.5 opacity-50 group-hover:opacity-100 transition-opacity">
-                                <span className={`text-[5px] sm:text-[7px] font-black uppercase tracking-widest ${isCompleted ? 'text-lime-400' : 'text-rose-500'}`}>{sessionInfo}</span>
-                              </div>
-                              <div className={`text-[7px] sm:text-[10px] font-black truncate tracking-tight leading-none ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</div>
-                              <div className={`text-[6px] sm:text-[8px] font-bold tracking-widest uppercase mt-0.5 ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>
-                                {format12h(cita.hora_inicio)} · {cita.duracion_minutos}m
-                                {cita.fisioterapeuta && !isLuisa && ` · ${cita.fisioterapeuta}`}
-                              </div>
-                            </button>
+                          <div key={`${d.fecha}-${hora}`} className="h-12 sm:h-20 p-[1px] sm:p-0.5 flex flex-col gap-0.5">
+                            {citasSlot.map(cita => {
+                              const p = cita.pacientes as any
+                              const sessionInfo = cita.notas?.split('.')[0]
+                              const isCompleted = esCompletada(cita.estado)
+                              return (
+                                <button key={cita.id} onClick={() => openPanel(cita)} className={`flex-1 min-h-0 w-full text-left rounded-[8px] sm:rounded-[20px] ${multi ? 'px-1 py-0.5 sm:px-2 sm:py-1' : 'p-0.5 sm:p-2'} flex flex-col justify-center cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg shadow-rose-100/20 group relative overflow-hidden ${isCompleted ? 'bg-lime-50 border border-lime-100 shadow-lime-100/30' : 'bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
+                                  {!multi && (
+                                    <div className="absolute top-0 right-0 p-0.5 opacity-50 group-hover:opacity-100 transition-opacity">
+                                      <span className={`text-[5px] sm:text-[7px] font-black uppercase tracking-widest ${isCompleted ? 'text-lime-400' : 'text-rose-500'}`}>{sessionInfo}</span>
+                                    </div>
+                                  )}
+                                  <div className={`${multi ? 'text-[6px] sm:text-[9px]' : 'text-[7px] sm:text-[10px]'} font-black truncate tracking-tight leading-none ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</div>
+                                  <div className={`${multi ? 'text-[5px] sm:text-[7px]' : 'text-[6px] sm:text-[8px]'} font-bold tracking-widest uppercase mt-0.5 truncate ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>
+                                    {format12h(cita.hora_inicio)}{!multi && ` · ${cita.duracion_minutos}m`}
+                                    {cita.fisioterapeuta && !isLuisa && ` · ${cita.fisioterapeuta}`}
+                                  </div>
+                                </button>
+                              )
+                            })}
                           </div>
                         )
                       }
