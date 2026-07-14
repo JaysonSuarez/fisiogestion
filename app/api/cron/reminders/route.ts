@@ -9,12 +9,12 @@ export async function GET(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Verificación de seguridad simple para Vercel Cron
-  // En producción, Vercel envía un header especial: Authorization: Bearer {CRON_SECRET}
+  // Verificación de seguridad: solo se permite con el CRON_SECRET.
+  // El scheduler real ahora vive en Supabase (pg_cron); este endpoint queda
+  // como respaldo manual protegido para que nadie lo dispare por fuera.
   const authHeader = req.headers.get('authorization')
-  if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    // return new Response('Unauthorized', { status: 401 })
-    // Nota: Por ahora lo dejamos abierto para que puedas probarlo manualmente
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 })
   }
 
   try {
