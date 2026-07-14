@@ -28,10 +28,11 @@ export default function DiezmoPage() {
       // cada sesión y descontar la comisión de Luisa antes de calcular el diezmo).
       const { data } = await supabase
         .from('sesiones')
-        .select('valor, monto_pagado, duracion_minutos, citas(fisioterapeuta, estado)')
+        .select('valor, monto_pagado, duracion_minutos, cortesia, citas(fisioterapeuta, estado)')
         .eq('diezmo_entregado', false)
 
-      const planes = data || []
+      // Los planes de cortesía/deuda no son ingreso real: se excluyen del diezmo.
+      const planes = (data || []).filter((s: any) => !s.cortesia)
       const bruto = planes.reduce((acc, s: any) => acc + (s.monto_pagado || 0), 0)
       const comision = planes.reduce((acc, s: any) => acc + calcularComisionLuisa(s), 0)
       const ganancia = planes.reduce((acc, s: any) => acc + calcularGananciaLiliana(s), 0)

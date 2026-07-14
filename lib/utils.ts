@@ -72,6 +72,7 @@ export interface PlanFinanzas {
   valor: number
   monto_pagado?: number
   duracion_minutos?: number
+  cortesia?: boolean
   citas?: { fisioterapeuta?: string | null; estado?: string | null }[]
 }
 
@@ -100,13 +101,16 @@ export const getValorPorSesion = (plan: PlanFinanzas) => {
 // Ej.: 5 sesiones a 50.000, Luisa hizo 2 (=100.000) y el paciente pagó 120.000 →
 // como 120.000 ≥ 100.000, Luisa cobra 25% × 100.000 = 25.000. Si solo se hubiera
 // pagado 63.000, cobraría 25% × 63.000 = 15.750.
+// Excepción: en planes de CORTESÍA/DEUDA la clínica le paga a Luisa el 25% de todo
+// lo que trabajó aunque no haya recaudo (ver [[fisiogestion-diezmo-regla]]).
 export const calcularComisionLuisa = (plan: PlanFinanzas) => {
   const citas = plan.citas || []
   const sesionesLuisa = citas.filter(c => c.fisioterapeuta === 'Luisa' && esCitaCompletada(c.estado)).length
   if (sesionesLuisa === 0) return 0
-  const recaudado = plan.monto_pagado || 0
   const valorTrabajadoLuisa = getValorPorSesion(plan) * sesionesLuisa
-  const baseCobrable = Math.min(valorTrabajadoLuisa, recaudado)
+  const baseCobrable = plan.cortesia
+    ? valorTrabajadoLuisa
+    : Math.min(valorTrabajadoLuisa, plan.monto_pagado || 0)
   return Math.round(baseCobrable * 0.25)
 }
 

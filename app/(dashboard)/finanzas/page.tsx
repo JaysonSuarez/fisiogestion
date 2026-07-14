@@ -89,24 +89,76 @@ function FinanzasContent() {
       })
       setPacientesPagados(Object.values(agrupadosPagos).sort((a: any, b: any) => b.totalPagado - a.totalPagado))
 
-      // Deuda: TODAS las sesiones pendientes (independiente del mes), es una lista de pendientes por cobrar
+      // Deuda: TODAS las sesiones pendientes (independiente del mes). Los planes de
+      // cortesía/deuda se excluyen: no son cobrables al paciente.
       const { data: pendientes } = await supabase
         .from('sesiones')
-        .select('id, paciente_id, valor, monto_pagado, fecha, pacientes(nombre)')
+        .select('id, paciente_id, valor, monto_pagado, fecha, cortesia, pacientes(nombre)')
 
-      const deudoresRaw = pendientes?.filter(s => (s.monto_pagado || 0) < s.valor) || []
+      const deudoresRaw = pendientes?.filter(s => !(s as any).cortesia && (s.monto_pagado || 0) < s.valor) || []
 
-      // Citas que Luisa realizó (completadas) en el mes → comisión del 25%
+      // Citas que Luisa realizó (completadas) en el mes → comisión del 25%.
+      // La comisión sale SOLO de lo pagado (salvo cortesía): se reparte el recaudo
+      // del plan entre las sesiones de Luisa por orden cronológico.
       const { data: citasLu } = await supabase
         .from('citas')
-        .select('id, fecha, pago_terapeuta_control, sesiones(valor, duracion_minutos, pacientes(nombre))')
+        .select('id, fecha, hora_inicio, pago_terapeuta_control, sesion_id, sesiones(valor, monto_pagado, duracion_minutos, cortesia, pacientes(nombre))')
         .eq('fisioterapeuta', 'Luisa')
         .eq('estado', 'completada')
         .gte('fecha', startDate)
         .lte('fecha', endDate)
         .order('fecha', { ascending: false })
 
-      setCitasLuisa(citasLu || [])
+      const mesCitas = (citasLu || []) as any[]
+      const sesionIdsLuisa = Array.from(new Set(mesCitas.map(c => c.sesion_id).filter(Boolean)))
+
+      // Todas las citas completadas de Luisa de esos planes (incluye otros meses),
+      // para repartir el pago del plan en orden cronológico.
+      let todasLuisaPlan: any[] = []
+      if (sesionIdsLuisa.length > 0) {
+        const { data: allLu } = await supabase
+          .from('citas')
+          .select('id, fecha, hora_inicio, sesion_id')
+          .eq('fisioterapeuta', 'Luisa')
+          .eq('estado', 'completada')
+          .in('sesion_id', sesionIdsLuisa)
+        todasLuisaPlan = allLu || []
+      }
+
+      const planInfo: Record<string, any> = {}
+      mesCitas.forEach(c => { if (c.sesion_id) planInfo[c.sesion_id] = c.sesiones })
+
+      const porPlan = todasLuisaPlan.reduce((acc: Record<string, any[]>, c) => {
+        (acc[c.sesion_id] = acc[c.sesion_id] || []).push(c); return acc
+      }, {})
+
+      const comisionPorCita: Record<string, number> = {}
+      Object.entries(porPlan).forEach(([sid, lista]) => {
+        const info = planInfo[sid]
+        if (!info) return
+        const vps = getValorPorSesion({ valor: info.valor, duracion_minutos: info.duracion_minutos })
+        const ordenadas = (lista as any[]).slice().sort((a, b) =>
+          (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio))
+        let acumulado = 0
+        ordenadas.forEach(c => {
+          const base = info.cortesia
+            ? vps
+            : Math.max(0, Math.min(vps, (info.monto_pagado || 0) - acumulado))
+          comisionPorCita[c.id] = Math.round(base * 0.25)
+          acumulado += vps
+        })
+      })
+
+      const procesadas = mesCitas.map(c => ({
+        id: c.id,
+        fecha: c.fecha,
+        nombre: c.sesiones?.pacientes?.nombre,
+        comision: comisionPorCita[c.id] ?? 0,
+        pagado: c.pago_terapeuta_control === 'pagado',
+        cortesia: !!c.sesiones?.cortesia,
+      }))
+
+      setCitasLuisa(procesadas)
 
       const agrupados: Record<string, any> = {}
       deudoresRaw.forEach(s => {
@@ -150,18 +202,15 @@ function FinanzasContent() {
     }
   }, [selectedMonth])
 
-  // ─── Comisión de Luisa (mes) ────────────────────────────────────────────────
-  const citasLuisaProcesadas = citasLuisa.map(c => {
-    const s = c.sesiones as any
-    const comision = Math.round(getValorPorSesion({ valor: s.valor, duracion_minutos: s.duracion_minutos }) * 0.25)
-    return { ...c, comision, pagado: c.pago_terapeuta_control === 'pagado', nombre: s.pacientes?.nombre }
-  })
+  // ─── Comisión de Luisa (mes) — ya calculada en loadData, capada por lo pagado ──
+  const citasLuisaProcesadas = citasLuisa as any[]
   const totalComisionLuisa = citasLuisaProcesadas.reduce((a, c) => a + c.comision, 0)
   const comisionPendienteLuisa = citasLuisaProcesadas.filter(c => !c.pagado).reduce((a, c) => a + c.comision, 0)
 
-  // ─── Flujo de dinero del mes ────────────────────────────────────────────────
-  const recaudadoBruto = sesiones.reduce((a, s) => a + (s.monto_pagado || 0), 0)
-  const gananciaLiliana = Math.max(0, recaudadoBruto - totalComisionLuisa)
+  // ─── Flujo de dinero del mes (los planes de cortesía no son ingreso real) ─────
+  const recaudadoBruto = sesiones.filter((s: any) => !s.cortesia).reduce((a, s) => a + (s.monto_pagado || 0), 0)
+  const comisionParaGanancia = citasLuisaProcesadas.filter(c => !c.cortesia).reduce((a, c) => a + c.comision, 0)
+  const gananciaLiliana = Math.max(0, recaudadoBruto - comisionParaGanancia)
   const diezmoEstimado = calcularDiezmo(gananciaLiliana)
   const carteraPorCobrar = pacientesDeudores.reduce((a, p) => a + p.deudaTotal, 0)
 
@@ -344,7 +393,7 @@ function FinanzasContent() {
             </div>
             <div className="flex items-center justify-between text-amber-300">
               <span className="text-xs font-bold uppercase tracking-widest">− Comisión de Luisa</span>
-              <span className="text-lg font-black">−{formatCOP(totalComisionLuisa)}</span>
+              <span className="text-lg font-black">−{formatCOP(comisionParaGanancia)}</span>
             </div>
             <div className="h-px bg-white/10" />
             <div className="flex items-center justify-between">

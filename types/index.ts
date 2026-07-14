@@ -39,6 +39,7 @@ export interface Sesion {
   created_at: string
   monto_pagado?: number
   diezmo_entregado?: boolean
+  cortesia?: boolean
 }
 
 export interface Pago {
