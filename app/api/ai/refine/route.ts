@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { CohereClientV2 } from 'cohere-ai'
+import { getApiUser } from '@/lib/api-auth'
 
 // Inicializamos con tu API KEY de Cohere
 const cohere = new CohereClientV2({
@@ -8,10 +9,21 @@ const cohere = new CohereClientV2({
 
 export async function POST(req: Request) {
   try {
+    // Solo usuarios autenticados pueden gastar cuota de Cohere
+    const user = await getApiUser()
+    if (!user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
     const { text, fieldName } = await req.json()
 
     if (!text) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 })
+    }
+
+    // Límite defensivo para evitar prompts abusivos que disparen la cuota
+    if (typeof text !== 'string' || text.length > 5000) {
+      return NextResponse.json({ error: 'Texto demasiado largo' }, { status: 400 })
     }
 
     const prompt = `Contexto: Eres un asistente experto para fisioterapeutas. 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { CohereClientV2 } from 'cohere-ai'
+import { getApiUser } from '@/lib/api-auth'
 
 const cohere = new CohereClientV2({
   token: process.env.COHERE_API_KEY || ''
@@ -7,6 +8,12 @@ const cohere = new CohereClientV2({
 
 export async function POST(req: Request) {
   try {
+    // Solo usuarios autenticados pueden gastar cuota de Cohere
+    const user = await getApiUser()
+    if (!user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
     const { motivo_consulta, diagnostico_fisio, hallazgos, escala_eva } = await req.json()
 
     const prompt = `Contexto: Eres un asistente clínico experto en fisioterapia y rehabilitación.
