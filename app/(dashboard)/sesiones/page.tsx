@@ -174,6 +174,11 @@ export default function SesionesPage() {
     setLocalCitas(localCitas.map(c => c.id === id ? { ...c, estado: 'completada' } : c))
   }
 
+  // Revertir una sesión marcada como completada por error (vuelve a pendiente).
+  const handleUncompleteLocalSession = (id: string) => {
+    setLocalCitas(localCitas.map(c => c.id === id ? { ...c, estado: 'pendiente' } : c))
+  }
+
   const savePlanChanges = async () => {
     setSaving(true)
     try {
@@ -458,23 +463,28 @@ export default function SesionesPage() {
                                    <span className={`text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${cita.estado === 'completada' || cita.estado === 'completado' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}>
                                       {cita.estado}
                                    </span>
-                                   {cita.estado !== 'completada' && cita.estado !== 'completado' && (
-                                      <button 
+                                   {cita.estado !== 'completada' && cita.estado !== 'completado' ? (
+                                      <button
                                         onClick={() => handleCompleteLocalSession(cita.id)}
                                         className="text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-rose-600 text-white hover:bg-rose-700 transition-colors flex items-center gap-1"
                                       >
                                          <CheckCircle size={10} /> Completar
                                       </button>
+                                   ) : (
+                                      <button
+                                        onClick={() => handleUncompleteLocalSession(cita.id)}
+                                        className="text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-amber-100 text-amber-600 hover:bg-amber-200 transition-colors flex items-center gap-1"
+                                      >
+                                         <Minus size={10} /> Reabrir
+                                      </button>
                                    )}
                                  </div>
-                                 {cita.estado !== 'completada' && cita.estado !== 'completado' && (
-                                    <button 
-                                      onClick={() => handleRemoveLocalSession(cita.id)}
-                                      className="p-2 text-rose-200 hover:text-rose-500 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                    >
-                                       <Trash2 size={16} />
-                                    </button>
-                                 )}
+                                 <button
+                                   onClick={() => handleRemoveLocalSession(cita.id)}
+                                   className="p-2 text-rose-200 hover:text-rose-500 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                 >
+                                    <Trash2 size={16} />
+                                 </button>
                                </div>
                             </div>
                          </div>
