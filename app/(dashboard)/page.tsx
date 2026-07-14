@@ -56,6 +56,7 @@ export default function DashboardPage() {
 
   // Verification State (Asistencia)
   const [verificationCita, setVerificationCita] = useState<any>(null)
+  const [dismissedVerifications, setDismissedVerifications] = useState<Set<string>>(new Set())
   const [isRescheduling, setIsRescheduling] = useState(false)
   const [rescheduleData, setRescheduleData] = useState({ fecha: '', hora: '' })
   const [saving, setSaving] = useState(false)
@@ -214,6 +215,13 @@ export default function DashboardPage() {
   // Funciones de Verificación (Misma lógica que en Agenda)
   const handleConfirmAttendance = async (attended: boolean) => {
     if (!verificationCita) return
+    // "Ahora no" → posponer sin bloquear la vista (no reaparece hasta recargar)
+    if (!attended) {
+      setDismissedVerifications(prev => new Set(prev).add(verificationCita.id))
+      setVerificationCita(null)
+      setIsRescheduling(false)
+      return
+    }
     setSaving(true)
     try {
       if (attended) {
@@ -258,10 +266,13 @@ export default function DashboardPage() {
     try {
       const { error } = await supabase
         .from('citas')
-        .update({ 
-          fecha: rescheduleData.fecha, 
+        .update({
+          fecha: rescheduleData.fecha,
           hora_inicio: rescheduleData.hora,
-          estado: 'pendiente'
+          estado: 'pendiente',
+          // Reiniciar avisos para que el cron notifique con la hora nueva
+          notificado_1h: false,
+          notificado_10m: false
         })
         .eq('id', verificationCita.id)
       
@@ -322,9 +333,9 @@ export default function DashboardPage() {
         const diff = citaTime.getTime() - currentTime.getTime()
         const minsRemaining = Math.floor(diff / 60000)
 
-        // Verificación de citas pasadas
+        // Verificación de citas pasadas (posponible: no reaparece si ya se cerró)
         if (minsRemaining < 0 && (cita.estado === 'pendiente' || cita.estado === 'confirmada' || cita.estado === 'confirmado')) {
-          if (!verificationCita) {
+          if (!verificationCita && !dismissedVerifications.has(cita.id)) {
             setVerificationCita(cita)
             setRescheduleData({ fecha: cita.fecha, hora: cita.hora_inicio.slice(0, 5) })
           }
@@ -346,29 +357,13 @@ export default function DashboardPage() {
       })
     }
     
-    // Al activar un recordatorio, disparar notificación
-    if (activeReminder && !remindedIds.has(`${activeReminder.id}-${activeReminder.phase}`)) {
-      const isUltimoMinuto = activeReminder.phase === '10m'
-      const titulo = isUltimoMinuto ? '¡Cita en pocos minutos! 🚨' : '¡Recordatorio de Cita! ⏰'
-      
-      if ('Notification' in window && Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(titulo, {
-            body: `Cita con ${activeReminder.pacientes?.nombre} a las ${format12h(activeReminder.hora_inicio)}. Faltan aprox. ${activeReminder.minsLeft} min.`,
-            icon: '/logo.png',
-            tag: `reminder-${activeReminder.id}-${activeReminder.phase}`,
-            requireInteraction: true,
-            data: {
-              url: `/?cita_id=${activeReminder.id}&phase=${activeReminder.phase}&trigger_wa=true`
-            }
-          })
-        })
-      }
-    }
+    // Nota: las notificaciones push del sistema las envía el cron del servidor
+    // (única fuente de verdad, siempre lee la hora fresca de la BD). Aquí solo
+    // mostramos el recordatorio visual dentro de la app cuando está abierta.
 
     const interval = setInterval(checkReminders, 30000)
     return () => clearInterval(interval)
-  }, [data.citasHoy, remindedIds, activeReminder])
+  }, [data.citasHoy, remindedIds, activeReminder, dismissedVerifications, verificationCita])
 
   const dismissReminder = (id: string, phase: string) => {
     setRemindedIds(prev => {
@@ -708,8 +703,8 @@ export default function DashboardPage() {
                 <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl">
                   {isRescheduling ? <Calendar size={24} /> : <AlertCircle size={24} />}
                 </div>
-                <button 
-                  onClick={() => setVerificationCita(null)} 
+                <button
+                  onClick={() => { setDismissedVerifications(prev => new Set(prev).add(verificationCita.id)); setVerificationCita(null); setIsRescheduling(false) }}
                   className="p-2 text-slate-300 hover:text-slate-500 transition-colors"
                 >
                   <X size={20} />
@@ -725,11 +720,11 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-4">
-                    <button 
+                    <button
                       onClick={() => handleConfirmAttendance(false)}
                       className="py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all"
                     >
-                      No, pendiente
+                      Ahora no
                     </button>
                     <button 
                       onClick={() => handleConfirmAttendance(true)}

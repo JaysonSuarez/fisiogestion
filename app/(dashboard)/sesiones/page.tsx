@@ -197,10 +197,13 @@ export default function SesionesPage() {
 
       const toUpdate = localCitas.filter(c => !c.isNew)
       for (const c of toUpdate) {
-        await supabase.from('citas').update({ 
-          fecha: c.fecha, 
+        await supabase.from('citas').update({
+          fecha: c.fecha,
           estado: c.estado,
-          fisioterapeuta: c.fisioterapeuta || 'Liliana'
+          fisioterapeuta: c.fisioterapeuta || 'Liliana',
+          // Reiniciar avisos para que el cron notifique con la fecha/hora nueva
+          notificado_1h: false,
+          notificado_10m: false
         }).eq('id', c.id)
       }
 
