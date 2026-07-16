@@ -214,7 +214,8 @@ export default function NuevaSesionPage({
       for (let i = 0; i < cantidadSesiones; i++) {
         while (true) {
           const day = getDay(currentCitaDate)
-          if (isSunday(currentCitaDate)) {
+          // No se labora los sábados, se pasa al domingo
+          if (day === 6) {
             currentCitaDate = addDays(currentCitaDate, 1)
             continue
           }
@@ -248,11 +249,6 @@ export default function NuevaSesionPage({
           const day = getDay(currentCitaDate)
           if (day === 1 || day === 3) currentCitaDate = addDays(currentCitaDate, 2)
           else if (day === 5) currentCitaDate = addDays(currentCitaDate, 3)
-          else currentCitaDate = addDays(currentCitaDate, 1)
-        } else if (frecuencia === 'martes_jueves_sabado') {
-          const day = getDay(currentCitaDate)
-          if (day === 2 || day === 4) currentCitaDate = addDays(currentCitaDate, 2)
-          else if (day === 6) currentCitaDate = addDays(currentCitaDate, 2)
           else currentCitaDate = addDays(currentCitaDate, 1)
         }
       }
@@ -466,7 +462,6 @@ export default function NuevaSesionPage({
                     <option value="todos_los_dias">Diario</option>
                     <option value="dia_de_por_medio">Interdiario</option>
                     <option value="lunes_miercoles_viernes">L-M-V</option>
-                    <option value="martes_jueves_sabado">M-J-S</option>
                     <option value="custom">Manual</option>
                   </select>
                </div>
