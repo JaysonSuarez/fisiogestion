@@ -16,6 +16,7 @@ const navItems = [
   { href: '/agenda',    label: 'Calendario',  icon: CalendarDays },
   { href: '/finanzas',  label: 'Finanzas',    icon: Wallet },
   { href: '/diezmo',    label: 'Diezmo',      icon: Heart },
+  { href: '/promociones',label: 'Promos',     icon: Ticket },
   { href: '/ajustes',   label: 'Ajustes',     icon: Settings },
 ]
 

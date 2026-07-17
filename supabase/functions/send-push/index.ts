@@ -13,17 +13,22 @@ serve(async (req) => {
   }
 
   try {
-    const { target_user_id, title, body, url } = await req.json()
+    const { target_user_id, target_role, title, body, url } = await req.json()
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Dado que no hay auth estricto, obremos enviando a todas las suscripciones o a las válidas
-    const { data: subscriptions, error: subError } = await supabase
-      .from('push_subscriptions')
-      .select('subscription_data, user_id')
+    let query = supabase.from('push_subscriptions').select('subscription_data, user_id, role')
+    
+    if (target_user_id) {
+      query = query.eq('user_id', target_user_id)
+    } else if (target_role) {
+      query = query.eq('role', target_role)
+    }
+
+    const { data: subscriptions, error: subError } = await query
 
     if (subError || !subscriptions || subscriptions.length === 0) {
       return new Response(JSON.stringify({ error: 'No subscriptions found' }), {

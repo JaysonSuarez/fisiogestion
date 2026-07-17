@@ -11,7 +11,7 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-export async function subscribeUser(): Promise<boolean> {
+export async function subscribeUser(role: string = 'profesional'): Promise<boolean> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     console.warn('Push messaging is not supported');
     return false;
@@ -53,6 +53,7 @@ export async function subscribeUser(): Promise<boolean> {
       .insert({
         user_id: user.id,
         subscription_data: subscriptionJSON,
+        role: role,
       });
 
     if (error) {

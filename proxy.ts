@@ -55,30 +55,54 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const isLuisa = user?.email?.toLowerCase().includes('luisa')
+  const path = request.nextUrl.pathname
 
-  const protectedAdminRoutes = ['/finanzas', '/diezmo', '/ajustes']
-  const isProtectedAdminRoute = protectedAdminRoutes.some(route => request.nextUrl.pathname.startsWith(route))
+  if (path.startsWith('/app')) {
+    // === PATIENT APP ROUTING ===
+    const isPatientLoginOrRegistro = path.startsWith('/app/login') || path.startsWith('/app/registro')
 
-  // Redirigir a login si no hay usuario y no está en la ruta de login ni archivos estáticos
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/agendar')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
+    // Redirect to patient login if not authenticated and trying to access a protected patient route
+    if (!user && !isPatientLoginOrRegistro) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/app/login'
+      return NextResponse.redirect(url)
+    }
 
-  // Redirigir a inicio si ya hay usuario pero está en login
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
-  }
+    // Redirect to patient app home if authenticated and trying to access patient login/registration
+    if (user && isPatientLoginOrRegistro) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/app'
+      return NextResponse.redirect(url)
+    }
+  } else {
+    // === ADMIN DASHBOARD ROUTING ===
+    const isLuisa = user?.email?.toLowerCase().includes('luisa')
+    const protectedAdminRoutes = ['/finanzas', '/diezmo', '/ajustes']
+    const isProtectedAdminRoute = protectedAdminRoutes.some(route => path.startsWith(route))
 
-  // Redirigir a inicio si es Luisa e intenta acceder a ruta protegida de Admin
-  if (user && isLuisa && isProtectedAdminRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
+    // Redirect to admin login if not authenticated and trying to access a protected admin route
+    // Note: /agendar is matched by the route path, so we exclude it explicitly
+    const isPublicAdminRoute = path.startsWith('/login') || path.startsWith('/agendar')
+
+    if (!user && !isPublicAdminRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+
+    // Redirect to admin dashboard home if authenticated and trying to access admin login
+    if (user && path.startsWith('/login')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+
+    // Redirect to admin dashboard home if user is Luisa and trying to access protected admin routes
+    if (user && isLuisa && isProtectedAdminRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
   }
 
   return response
@@ -94,7 +118,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - sw.js (service worker)
      * - manifest.json (manifest file)
+     * - static image formats (svg, png, jpg, jpeg, gif, webp)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|.*\\.png|.*\\.jpg).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
