@@ -14,7 +14,7 @@ import { validarCupon, reclamarCupon, aplicarDescuentoCupon, type ResultadoCupon
 
 // ─── Precios estáticos según número de sesiones ───────────────────────────────
 const PLANES_PRECIOS = [
-  { id: 'evaluacion', sesiones: 1, precio: 60000,  label: 'Valoración' },
+  { id: 'evaluacion', sesiones: 1, precio: 30000,  label: 'Valoración' },
   { id: 'descarga-muscular',  sesiones: 1,  precio: 100000,  label: 'Descarga Muscular' },
   { id: 'recovery-premium',   sesiones: 1,  precio: 100000,  label: 'Recovery Premium' },
   { id: 'recovery-star',      sesiones: 5,  precio: 350000,  label: 'Recovery Star' },

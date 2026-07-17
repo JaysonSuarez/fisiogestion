@@ -37,7 +37,7 @@ export default function NuevaSesionPage({
   
   const [pacienteId, setPacienteId] = useState(resolvedParams.paciente ?? '')
   const [cantidadSesiones, setCantidadSesiones] = useState<number>(1)
-  const [valorPorSesion, setValorPorSesion] = useState<number>(60000)
+  const [valorPorSesion, setValorPorSesion] = useState<number>(30000)
   const [tipoPlan, setTipoPlan] = useState('valoracion')
   const [isCustomSesiones, setIsCustomSesiones] = useState(false)
 
@@ -97,7 +97,7 @@ export default function NuevaSesionPage({
   ]
 
   const getMinPrice = (cantidad: number, type: string) => {
-    if (type === 'valoracion') return 60000
+    if (type === 'valoracion') return 30000
     if (cantidad === 1) return 100000
     if (cantidad === 5) return 70000 // 350,000 total
     if (cantidad === 10) return 70000 // 700,000 total
