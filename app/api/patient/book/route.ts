@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
   try {
-    const { plan, slots, motivo, user_id, esDomicilio, usarSesionGratis, usoDescuento } = await req.json()
+    const { plan, slots, motivo, user_id, esDomicilio, usarSesionGratis, usoDescuento, activePromo } = await req.json()
     const cookieStore = await cookies()
 
     const supabase = createServerClient(
@@ -52,8 +52,13 @@ export async function POST(req: Request) {
 
     // 3. Aplicar descuento o sesión gratis
     let precioTotal = plan.precio
+    let notasPromo = ''
 
-    if (usarSesionGratis && profile.sesiones_gratis > 0) {
+    if (activePromo && activePromo.porcentaje_descuento) {
+      const ratio = 1 - (activePromo.porcentaje_descuento / 100)
+      precioTotal = Math.round(plan.precio * ratio)
+      notasPromo = `Aplicó Promo: ${activePromo.titulo}. `
+    } else if (usarSesionGratis && profile.sesiones_gratis > 0) {
       const precioPorSesion = Math.round(plan.precio / plan.sesiones)
       precioTotal = plan.precio - precioPorSesion
     } else if (usoDescuento && profile.descuentos_disponibles > 0) {
@@ -90,14 +95,14 @@ export async function POST(req: Request) {
       hora_inicio: s.hora,
       duracion_minutos: 60,
       estado: 'confirmada', // ¡Directamente confirmada!
-      notas: (usoDescuento ? 'Aplicó descuento 15% por referido. ' : '') + (esDomicilio ? 'DOMICILIO.' : '')
+      notas: notasPromo + (usoDescuento && !activePromo ? 'Aplicó descuento 15% por referido. ' : '') + (esDomicilio ? 'DOMICILIO.' : '')
     }))
 
     const { error: citasError } = await supabase.from('citas').insert(citasToInsert)
     if (citasError) throw citasError
 
     // 6. Restar descuento o sesión gratis si se usó
-    if (usoDescuento) {
+    if (usoDescuento && !activePromo) {
       await supabase
         .from('patient_profiles')
         .update({ descuentos_disponibles: profile.descuentos_disponibles - 1 })

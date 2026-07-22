@@ -38,6 +38,7 @@ export default function PatientAgendarPage() {
   const [usarSesionGratis, setUsarSesionGratis] = useState(false)
 
   const [planSeleccionado, setPlanSeleccionado] = useState<typeof PLANES_PRECIOS[0] | null>(null)
+  const [activePromo, setActivePromo] = useState<any>(null)
   
   const getCustomPrice = (sessions: number) => {
     if (sessions === 1) return 80000 // Fallback, aunque no debería permitirse 1 aquí
@@ -69,6 +70,13 @@ export default function PatientAgendarPage() {
       }
       const { data: citas } = await supabase.from('citas').select('fecha, hora_inicio').neq('estado', 'cancelada')
       setCitasExistentes(citas || [])
+      
+      const promoStr = localStorage.getItem('activePromo')
+      if (promoStr) {
+        try {
+          setActivePromo(JSON.parse(promoStr))
+        } catch (e) {}
+      }
     }
     init()
   }, [])
@@ -121,16 +129,19 @@ export default function PatientAgendarPage() {
   })()
 
   // Lógica de Descuentos
-  // Solo se permite usar O sesión gratis O descuento del 15% (No acumulables)
+  // Solo se permite usar O promo O sesión gratis O descuento del 15% (No acumulables)
   const tieneDescuento = (perfil?.descuentos_disponibles || 0) > 0
   const tieneSesionGratis = (perfil?.sesiones_gratis || 0) > 0
 
-  const usoDescuento = tieneDescuento && !usarSesionGratis
+  const usoDescuento = tieneDescuento && !usarSesionGratis && !activePromo
   
   let basePrice = currentPlan ? currentPlan.precio : 0
   let discountPrice = basePrice
 
-  if (usarSesionGratis && currentPlan) {
+  if (activePromo && activePromo.porcentaje_descuento) {
+    const ratio = 1 - (activePromo.porcentaje_descuento / 100)
+    discountPrice = Math.round(basePrice * ratio)
+  } else if (usarSesionGratis && currentPlan && !activePromo) {
     const precioPorSesion = Math.round(basePrice / currentPlan.sesiones)
     discountPrice = basePrice - precioPorSesion
   } else if (usoDescuento) {
@@ -153,8 +164,9 @@ export default function PatientAgendarPage() {
           motivo,
           user_id: user.id,
           esDomicilio,
-          usarSesionGratis,
-          usoDescuento
+          usarSesionGratis: usarSesionGratis && !activePromo,
+          usoDescuento: usoDescuento && !activePromo,
+          activePromo
         })
       })
 
@@ -163,6 +175,7 @@ export default function PatientAgendarPage() {
         throw new Error(data.error)
       }
       
+      localStorage.removeItem('activePromo')
       setStep('enviado')
     } catch (err: any) {
       alert('Error: ' + err.message)
@@ -207,6 +220,24 @@ export default function PatientAgendarPage() {
               />
             </div>
 
+            {activePromo && currentPlan && (
+              <div className="bg-purple-50 border-2 border-purple-200 p-4 rounded-2xl flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-black text-purple-900">Promo: {activePromo.titulo}</p>
+                  <p className="text-xs text-purple-700 font-bold">Descuento especial activado</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setActivePromo(null);
+                    localStorage.removeItem('activePromo');
+                  }}
+                  className="text-xs font-black text-purple-500 hover:text-purple-700 uppercase tracking-widest px-3 py-1 bg-purple-100 rounded-full transition-colors"
+                >
+                  Quitar
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {PLANES_PRECIOS.map(plan => (
                 <button
@@ -247,7 +278,7 @@ export default function PatientAgendarPage() {
             <div className="bg-white border-2 border-rose-50 p-4 rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-sm font-black text-rose-950">Servicio a Domicilio</p>
-                {esDomicilio && <p className="text-xs text-rose-500 font-bold">Se aplican +$10.000 por sesión</p>}
+                {esDomicilio && currentPlan && <p className="text-xs text-rose-500 font-bold">Se aplican +{formatCOP(currentPlan.sesiones * 10000)} en total</p>}
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" className="sr-only peer" checked={esDomicilio} onChange={(e) => setEsDomicilio(e.target.checked)} />
@@ -255,7 +286,7 @@ export default function PatientAgendarPage() {
               </label>
             </div>
 
-            {tieneSesionGratis && planSeleccionado && (
+            {!activePromo && tieneSesionGratis && currentPlan && (
               <div className="bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-200 p-4 rounded-2xl flex items-center justify-between">
                 <div>
                   <p className="text-sm font-black text-amber-900">¡Tienes Sesiones Gratis!</p>
@@ -268,16 +299,16 @@ export default function PatientAgendarPage() {
               </div>
             )}
 
-            {(usoDescuento || usarSesionGratis) && planSeleccionado && (
+            {(usoDescuento || usarSesionGratis || activePromo) && currentPlan && (
               <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-2xl text-xs font-bold flex justify-between items-center">
-                <span>{usarSesionGratis ? 'Sesión Gratis Aplicada' : 'Aplicando 15% Dto Referido'}</span>
+                <span>{activePromo ? `Promo: ${activePromo.titulo}` : usarSesionGratis ? 'Sesión Gratis Aplicada' : 'Aplicando 15% Dto Referido'}</span>
                 <span className="font-black">{formatCOP(precioFinal)}</span>
               </div>
             )}
 
             <button
               onClick={() => setStep('fechas')}
-              disabled={!planSeleccionado}
+              disabled={!currentPlan}
               className="w-full py-4 bg-rose-950 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-rose-900 transition-all disabled:opacity-40"
             >
               Siguiente
@@ -285,9 +316,9 @@ export default function PatientAgendarPage() {
           </div>
         )}
 
-        {step === 'fechas' && planSeleccionado && (
+        {step === 'fechas' && currentPlan && (
           <div className="bg-white rounded-[40px] shadow-xl shadow-rose-100/40 p-6 space-y-6">
-            <h2 className="font-black text-xl text-rose-950 uppercase tracking-tighter">Elige {planSeleccionado.sesiones} Fechas</h2>
+            <h2 className="font-black text-xl text-rose-950 uppercase tracking-tighter">Elige {currentPlan.sesiones} Fechas</h2>
             
             <div className="flex items-center justify-between mb-4">
               <button onClick={() => setWeekStart(addDays(weekStart, -7))} disabled={isBefore(addDays(weekStart, -7), startOfWeek(new Date(), { weekStartsOn: 1 }))} className="p-3 text-rose-300 disabled:opacity-0"><ChevronLeft size={24} /></button>
@@ -315,7 +346,7 @@ export default function PatientAgendarPage() {
                     {weekDays.map(d => {
                       const ocupado = isSlotRealmenteOcupado(d.fecha, hora)
                       const seleccionado = slotsSeleccionados.some(s => s.fecha === d.fecha && s.hora === hora)
-                      const lleno = slotsSeleccionados.length >= planSeleccionado.sesiones && !seleccionado
+                      const lleno = slotsSeleccionados.length >= currentPlan.sesiones && !seleccionado
                       const pasado = d.isPast || isBefore(new Date(`${d.fecha}T${hora}`), new Date())
 
                       return (
@@ -344,7 +375,7 @@ export default function PatientAgendarPage() {
               <button onClick={() => setStep('plan')} className="flex-1 py-4 border border-rose-100 text-rose-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50">Atrás</button>
               <button
                 onClick={() => setStep('confirmar')}
-                disabled={slotsSeleccionados.length !== planSeleccionado.sesiones}
+                disabled={slotsSeleccionados.length !== currentPlan.sesiones}
                 className="flex-[2] py-4 bg-rose-950 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-rose-900 transition-all disabled:opacity-40"
               >
                 Siguiente
@@ -353,19 +384,19 @@ export default function PatientAgendarPage() {
           </div>
         )}
 
-        {step === 'confirmar' && planSeleccionado && (
+        {step === 'confirmar' && currentPlan && (
           <div className="bg-white rounded-[40px] shadow-xl shadow-rose-100/40 p-6 space-y-6">
             <h2 className="font-black text-xl text-rose-950 uppercase tracking-tighter">Confirma tu Cita</h2>
             
             <div className="bg-rose-50/50 rounded-[24px] p-5 space-y-3">
               <div className="flex justify-between">
                 <span className="text-xs text-rose-400 font-bold">Plan</span>
-                <span className="text-xs font-black text-rose-950">{planSeleccionado.label}</span>
+                <span className="text-xs font-black text-rose-950">{currentPlan.label}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-rose-400 font-bold">Valor Total</span>
                 <span className="text-sm font-black text-rose-600">
-                  {usoDescuento && <span className="line-through text-rose-300 text-xs mr-2">{formatCOP(planSeleccionado.precio)}</span>}
+                  {(usoDescuento || usarSesionGratis || activePromo) && <span className="line-through text-rose-300 text-xs mr-2">{formatCOP(currentPlan.precio + totalDomicilio)}</span>}
                   {formatCOP(precioFinal)}
                 </span>
               </div>

@@ -91,10 +91,10 @@ export default function PatientHomePage() {
             {promociones.map((promo) => (
               <div key={promo.id} className="min-w-[280px] sm:min-w-[320px] bg-white rounded-[32px] p-5 shadow-xl shadow-rose-100/50 border border-rose-50 snap-center relative overflow-hidden">
                 {/* Descuento Ribbon */}
-                {promo.precio_original && promo.precio_promo && (
+                {promo.porcentaje_descuento && (
                   <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
                     <Tag size={10} />
-                    -{Math.round((1 - (promo.precio_promo / promo.precio_original)) * 100)}%
+                    -{promo.porcentaje_descuento}%
                   </div>
                 )}
                 <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mb-4">
@@ -102,20 +102,20 @@ export default function PatientHomePage() {
                 </div>
                 <h3 className="font-black text-lg text-rose-950 leading-tight mb-2">{promo.titulo}</h3>
                 <p className="text-xs text-rose-400 font-medium mb-4 line-clamp-2">{promo.descripcion}</p>
-                {promo.precio_promo && (
+                {promo.porcentaje_descuento && (
                   <div className="flex items-end gap-2">
-                    <span className="font-black text-xl text-rose-600">${promo.precio_promo.toLocaleString('es-CO')}</span>
-                    {promo.precio_original && (
-                      <span className="text-xs text-rose-300 line-through font-bold mb-1">${promo.precio_original.toLocaleString('es-CO')}</span>
-                    )}
+                    <span className="font-black text-xl text-rose-600">{promo.porcentaje_descuento}% DTO</span>
                   </div>
                 )}
-                <Link 
-                  href="/app/agendar"
+                <button 
+                  onClick={() => {
+                    localStorage.setItem('activePromo', JSON.stringify(promo));
+                    window.location.href = '/app/agendar';
+                  }}
                   className="mt-5 w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 transition-colors flex justify-center items-center gap-2"
                 >
                   Aprovechar <ChevronRight size={14} />
-                </Link>
+                </button>
               </div>
             ))}
           </div>

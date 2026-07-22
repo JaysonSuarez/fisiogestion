@@ -81,20 +81,19 @@ export default function PromocionesPage() {
                 placeholder="Descripción corta" 
                 className="w-full px-4 py-3 bg-rose-50/50 border-2 border-transparent focus:border-rose-200 focus:bg-white rounded-2xl outline-none transition-all font-bold text-rose-950 text-sm" 
               />
-              <input 
-                type="number" 
-                value={currentPromo.precio_original || ''} 
-                onChange={e => setCurrentPromo({...currentPromo, precio_original: e.target.value ? parseInt(e.target.value) : null})} 
-                placeholder="Precio Original (opcional)" 
-                className="w-full px-4 py-3 bg-rose-50/50 border-2 border-transparent focus:border-rose-200 focus:bg-white rounded-2xl outline-none transition-all font-bold text-rose-950 text-sm" 
-              />
-              <input 
-                type="number" 
-                value={currentPromo.precio_promo || ''} 
-                onChange={e => setCurrentPromo({...currentPromo, precio_promo: e.target.value ? parseInt(e.target.value) : null})} 
-                placeholder="Precio en Promoción (opcional)" 
-                className="w-full px-4 py-3 bg-rose-50/50 border-2 border-transparent focus:border-rose-200 focus:bg-white rounded-2xl outline-none transition-all font-bold text-rose-950 text-sm" 
-              />
+              <div className="flex items-center gap-2 w-full">
+                <input 
+                  type="number" 
+                  min="0"
+                  max="100"
+                  value={currentPromo.porcentaje_descuento || ''} 
+                  onChange={e => setCurrentPromo({...currentPromo, porcentaje_descuento: e.target.value ? parseInt(e.target.value) : null})} 
+                  placeholder="Porcentaje de Descuento (Ej: 15)" 
+                  className="w-full px-4 py-3 bg-rose-50/50 border-2 border-transparent focus:border-rose-200 focus:bg-white rounded-2xl outline-none transition-all font-bold text-rose-950 text-sm" 
+                  required
+                />
+                <span className="text-rose-400 font-black text-xl">%</span>
+              </div>
             </div>
             <div className="flex gap-3 justify-end mt-4">
               <button type="button" onClick={() => setIsEditing(false)} className="px-6 py-3 text-rose-400 font-bold text-[10px] uppercase tracking-widest hover:bg-rose-50 rounded-2xl transition-colors">Cancelar</button>
@@ -121,10 +120,9 @@ export default function PromocionesPage() {
             </div>
             <h3 className="font-black text-xl text-rose-950 tracking-tighter mb-1">{promo.titulo}</h3>
             <p className="text-sm text-rose-400 font-medium mb-4">{promo.descripcion}</p>
-            {promo.precio_promo && (
+            {promo.porcentaje_descuento && (
               <div className="flex items-center gap-2">
-                <span className="font-black text-xl text-rose-600">{formatCOP(promo.precio_promo)}</span>
-                {promo.precio_original && <span className="text-sm text-rose-300 line-through font-bold">{formatCOP(promo.precio_original)}</span>}
+                <span className="font-black text-xl text-rose-600">{promo.porcentaje_descuento}% DTO</span>
               </div>
             )}
           </div>
