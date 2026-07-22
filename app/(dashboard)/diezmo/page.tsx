@@ -4,7 +4,13 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { TrendingUp, CheckCircle, AlertCircle, Wallet, Info, Loader2, Heart, Sparkles, Check } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
-import { formatCOP, calcularComisionLuisa, calcularGananciaLiliana, calcularDiezmo } from '@/lib/utils'
+import { 
+  formatCOP, 
+  getRecaudoPendienteDiezmo, 
+  calcularComisionLuisaPendienteDiezmo, 
+  calcularGananciaLilianaPendienteDiezmo, 
+  calcularDiezmo 
+} from '@/lib/utils'
 
 export default function DiezmoPage() {
   const [loading, setLoading] = useState(true)
@@ -24,18 +30,17 @@ export default function DiezmoPage() {
 
   async function loadTotals() {
     try {
-      // Traemos los planes no entregados junto con sus citas (para saber quién realizó
-      // cada sesión y descontar la comisión de Luisa antes de calcular el diezmo).
+      // Traemos las sesiones que aún tienen recaudo pendiente por diezmar
       const { data } = await supabase
         .from('sesiones')
-        .select('valor, monto_pagado, duracion_minutos, cortesia, citas(fisioterapeuta, estado)')
+        .select('valor, monto_pagado, monto_diezmado, duracion_minutos, cortesia, citas(fisioterapeuta, estado)')
         .eq('diezmo_entregado', false)
 
-      // Los planes de cortesía/deuda no son ingreso real: se excluyen del diezmo.
-      const planes = (data || []).filter((s: any) => !s.cortesia)
-      const bruto = planes.reduce((acc, s: any) => acc + (s.monto_pagado || 0), 0)
-      const comision = planes.reduce((acc, s: any) => acc + calcularComisionLuisa(s), 0)
-      const ganancia = planes.reduce((acc, s: any) => acc + calcularGananciaLiliana(s), 0)
+      // Los planes de cortesía no generan diezmo. Filtramos los que tengan recaudo pendiente de diezmo > 0
+      const planes = (data || []).filter((s: any) => !s.cortesia && getRecaudoPendienteDiezmo(s) > 0)
+      const bruto = planes.reduce((acc, s: any) => acc + getRecaudoPendienteDiezmo(s), 0)
+      const comision = planes.reduce((acc, s: any) => acc + calcularComisionLuisaPendienteDiezmo(s), 0)
+      const ganancia = planes.reduce((acc, s: any) => acc + calcularGananciaLilianaPendienteDiezmo(s), 0)
 
       setRecaudadoBruto(bruto)
       setComisionLuisa(comision)
@@ -51,7 +56,7 @@ export default function DiezmoPage() {
       setNotification({
         isOpen: true,
         type: 'info',
-        title: 'Diezmo en zero',
+        title: 'Diezmo en cero',
         message: 'No hay diezmo acumulado para entregar en este momento.'
       })
       return
@@ -59,13 +64,25 @@ export default function DiezmoPage() {
 
     try {
       setActionLoading(true)
-      const { error } = await supabase
-        .from('sesiones')
-        .update({ diezmo_entregado: true })
-        .eq('diezmo_entregado', false)
-        .gt('monto_pagado', 0)
 
-      if (error) throw error
+      // 1. Obtenemos las sesiones con recaudo no diezmado
+      const { data: pendientes } = await supabase
+        .from('sesiones')
+        .select('id, monto_pagado, monto_diezmado')
+        .eq('diezmo_entregado', false)
+
+      for (const sesion of (pendientes || [])) {
+        const pagado = sesion.monto_pagado || 0
+        if (pagado > (sesion.monto_diezmado || 0)) {
+          await supabase
+            .from('sesiones')
+            .update({ 
+              monto_diezmado: pagado,
+              diezmo_entregado: true 
+            })
+            .eq('id', sesion.id)
+        }
+      }
 
       setNotification({
         isOpen: true,

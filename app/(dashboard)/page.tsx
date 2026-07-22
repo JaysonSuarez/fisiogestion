@@ -32,7 +32,7 @@ import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 import NotificationModal from '@/components/ui/NotificationModal'
 import PushManager from '@/components/push/PushManager'
 import { OfflineSync } from '@/lib/offline-sync'
-import { formatCOP, format12h, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr, getMonthDateRange, calcularGananciaLiliana, calcularDiezmo } from '@/lib/utils'
+import { formatCOP, format12h, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr, getMonthDateRange, getRecaudoPendienteDiezmo, calcularGananciaLilianaPendienteDiezmo, calcularGananciaLiliana, calcularDiezmo } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -105,7 +105,7 @@ export default function DashboardPage() {
       }
 
       let citasHoyQuery = supabase.from('citas').select('*, pacientes(nombre, telefono)').eq('fecha', todayStr).neq('estado', 'cancelada')
-      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, diezmo_entregado, duracion_minutos, pacientes(nombre, id), citas(fisioterapeuta, estado)').gte('fecha', startDate).lte('fecha', endDate)
+      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, monto_diezmado, diezmo_entregado, duracion_minutos, pacientes(nombre, id), citas(fisioterapeuta, estado)').gte('fecha', startDate).lte('fecha', endDate)
       let citasMesQuery = supabase.from('citas').select('duracion_minutos').eq('estado', 'completada').gte('fecha', startDate).lte('fecha', endDate)
       
       if (isLu) {
@@ -127,8 +127,8 @@ export default function DashboardPage() {
 
       const porCobrar = todasSesiones?.reduce((acc, s) => acc + (s.valor - (s.monto_pagado || 0)), 0) || 0
       const ingresoGlobal = todasSesiones?.reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
-      // Ganancia de Liliana (recaudado − comisión de Luisa) sobre los planes aún no diezmados del mes
-      const gananciaDiezmable = todasSesiones?.filter(s => !s.diezmo_entregado).reduce((acc, s: any) => acc + calcularGananciaLiliana(s), 0) || 0
+      // Ganancia de Liliana (recaudado − comisión de Luisa) sobre los ingresos aún no diezmados del mes
+      const gananciaDiezmable = todasSesiones?.filter(s => !s.diezmo_entregado && getRecaudoPendienteDiezmo(s) > 0).reduce((acc, s: any) => acc + calcularGananciaLilianaPendienteDiezmo(s), 0) || 0
 
       const deudoresMap: Record<string, { nombre: string, deuda: number }> = {}
       todasSesiones?.forEach(s => {

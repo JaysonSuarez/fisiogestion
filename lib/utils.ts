@@ -71,6 +71,7 @@ export const getMonthDateRange = (yyyyMM: string) => {
 export interface PlanFinanzas {
   valor: number
   monto_pagado?: number
+  monto_diezmado?: number
   duracion_minutos?: number
   cortesia?: boolean
   citas?: { fisioterapeuta?: string | null; estado?: string | null }[]
@@ -94,15 +95,17 @@ export const getValorPorSesion = (plan: PlanFinanzas) => {
   return plan.valor / getNumSesionesPlan(plan)
 }
 
+// Recaudo de esta sesión/plan que aún NO ha sido diezmado
+export const getRecaudoPendienteDiezmo = (plan: PlanFinanzas) => {
+  const pagado = plan.monto_pagado || 0
+  const diezmado = plan.monto_diezmado || 0
+  return Math.max(0, pagado - diezmado)
+}
+
 // Comisión que le corresponde a Luisa por un plan: 25% del valor de las sesiones
 // que ella realizó (citas completadas asignadas a Luisa), pero SOLO sobre dinero
 // efectivamente pagado. Luisa no puede cobrar por trabajo que el paciente aún no
 // ha pagado, así que la base se limita a lo recaudado: min(valor trabajado, pagado).
-// Ej.: 5 sesiones a 50.000, Luisa hizo 2 (=100.000) y el paciente pagó 120.000 →
-// como 120.000 ≥ 100.000, Luisa cobra 25% × 100.000 = 25.000. Si solo se hubiera
-// pagado 63.000, cobraría 25% × 63.000 = 15.750.
-// Excepción: en planes de CORTESÍA/DEUDA la clínica le paga a Luisa el 25% de todo
-// lo que trabajó aunque no haya recaudo (ver [[fisiogestion-diezmo-regla]]).
 export const calcularComisionLuisa = (plan: PlanFinanzas) => {
   const citas = plan.citas || []
   const sesionesLuisa = citas.filter(c => c.fisioterapeuta === 'Luisa' && esCitaCompletada(c.estado)).length
@@ -114,12 +117,31 @@ export const calcularComisionLuisa = (plan: PlanFinanzas) => {
   return Math.round(baseCobrable * 0.25)
 }
 
+// Comisión de Luisa correspondiente de manera proporcional al recaudo pendiente de diezmo
+export const calcularComisionLuisaPendienteDiezmo = (plan: PlanFinanzas) => {
+  const citas = plan.citas || []
+  const sesionesLuisa = citas.filter(c => c.fisioterapeuta === 'Luisa' && esCitaCompletada(c.estado)).length
+  if (sesionesLuisa === 0) return 0
+  const valorTrabajadoLuisa = getValorPorSesion(plan) * sesionesLuisa
+  const recaudoPendiente = getRecaudoPendienteDiezmo(plan)
+  const baseCobrable = plan.cortesia
+    ? valorTrabajadoLuisa
+    : Math.min(valorTrabajadoLuisa, recaudoPendiente)
+  return Math.round(baseCobrable * 0.25)
+}
+
 // Ganancia real de Liliana sobre lo RECAUDADO de un plan (recaudado − comisión Luisa).
 // Se calcula sobre monto_pagado porque el diezmo/ganancia se computan sobre dinero
 // efectivamente recibido, no proyectado. Nunca negativo.
 export const calcularGananciaLiliana = (plan: PlanFinanzas) => {
   const recaudado = plan.monto_pagado || 0
   return Math.max(0, recaudado - calcularComisionLuisa(plan))
+}
+
+// Ganancia real de Liliana sobre el recaudo PENDIENTE DE DIEZMO de un plan
+export const calcularGananciaLilianaPendienteDiezmo = (plan: PlanFinanzas) => {
+  const recaudoPendiente = getRecaudoPendienteDiezmo(plan)
+  return Math.max(0, recaudoPendiente - calcularComisionLuisaPendienteDiezmo(plan))
 }
 
 export const DIEZMO_PORCENTAJE = 0.1
