@@ -1,13 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async redirects() {
-    return [
-      {
-        source: '/agendar',
-        destination: '/app/agendar',
-        permanent: true,
-      },
-    ]
-  },
+  // Nota: /agendar es la página pública de agendamiento (sin login).
+  // No redirigir a /app/agendar (que exige sesión). Ver app/agendar/page.tsx.
 }
 module.exports = nextConfig

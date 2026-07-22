@@ -8,6 +8,11 @@ export default function PatientPushProvider() {
   const [showPrompt, setShowPrompt] = useState(false)
 
   useEffect(() => {
+    // Algunos navegadores móviles (Safari iOS en pestaña normal, WebViews,
+    // navegadores in-app) no exponen la API Notification. Acceder a
+    // Notification.permission ahí lanza y tumbaría toda la página (incluido /app/login).
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+
     // Verificar si ya se pidió el permiso
     const permission = Notification.permission
     if (permission === 'default') {
@@ -24,7 +29,7 @@ export default function PatientPushProvider() {
     if (success) {
       setShowPrompt(false)
     } else {
-      if (Notification.permission === 'denied') {
+      if ('Notification' in window && Notification.permission === 'denied') {
         alert('Por favor habilita las notificaciones en la configuración de tu navegador.')
       }
       setShowPrompt(false)
