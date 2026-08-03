@@ -34,7 +34,7 @@ export default function DiezmoPage() {
       // `pacientes(...)` hace falta para saber si la fisio trajo al paciente (30%).
       const { data } = await supabase
         .from('sesiones')
-        .select('valor, monto_pagado, monto_diezmado, duracion_minutos, cortesia, citas(fisioterapeuta, estado, fecha, hora_inicio), pacientes(fisioterapeuta, traido_por_fisio)')
+        .select('valor, monto_pagado, monto_diezmado, duracion_minutos, cortesia, traido_por, citas(fisioterapeuta, estado, fecha, hora_inicio), pacientes(fisioterapeuta, traido_por_fisio)')
         .eq('diezmo_entregado', false)
 
       // Los planes de cortesía no generan diezmo. Filtramos los que tengan recaudo pendiente de diezmo > 0

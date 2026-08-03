@@ -17,6 +17,7 @@ import {
   getValorPorSesion,
   calcularDiezmo,
   getTasaComision,
+  getQuienTrajo,
   EMPLEADAS,
 } from '@/lib/utils'
 
@@ -105,7 +106,7 @@ function FinanzasContent() {
       // sus sesiones por orden cronológico.
       const { data: citasEmp } = await supabase
         .from('citas')
-        .select('id, fecha, hora_inicio, fisioterapeuta, pago_terapeuta_control, sesion_id, sesiones(valor, monto_pagado, duracion_minutos, cortesia, pacientes(nombre, fisioterapeuta, traido_por_fisio))')
+        .select('id, fecha, hora_inicio, fisioterapeuta, pago_terapeuta_control, sesion_id, sesiones(valor, monto_pagado, duracion_minutos, cortesia, traido_por, pacientes(nombre, fisioterapeuta, traido_por_fisio))')
         .in('fisioterapeuta', EMPLEADAS)
         .eq('estado', 'completada')
         .gte('fecha', startDate)
@@ -147,7 +148,7 @@ function FinanzasContent() {
           const base = info.cortesia
             ? vps
             : Math.max(0, Math.min(vps, (info.monto_pagado || 0) - acumulado))
-          comisionPorCita[c.id] = Math.round(base * getTasaComision(c.fisioterapeuta, info.pacientes))
+          comisionPorCita[c.id] = Math.round(base * getTasaComision(c.fisioterapeuta, getQuienTrajo(info)))
           acumulado += vps
         })
       })
@@ -157,7 +158,7 @@ function FinanzasContent() {
         fecha: c.fecha,
         nombre: c.sesiones?.pacientes?.nombre,
         fisioterapeuta: c.fisioterapeuta,
-        tasa: getTasaComision(c.fisioterapeuta, c.sesiones?.pacientes),
+        tasa: getTasaComision(c.fisioterapeuta, getQuienTrajo(c.sesiones)),
         comision: comisionPorCita[c.id] ?? 0,
         pagado: c.pago_terapeuta_control === 'pagado',
         cortesia: !!c.sesiones?.cortesia,

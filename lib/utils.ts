@@ -99,6 +99,11 @@ export interface PlanFinanzas {
   monto_diezmado?: number
   duracion_minutos?: number
   cortesia?: boolean
+  // Fisioterapeuta que trajo al paciente para ESTE plan. Se decide al crearlo y
+  // manda sobre el flag del paciente: el mismo paciente puede volver más adelante
+  // por su cuenta, y ese plan va al 25%. Es un nombre y no un booleano porque un
+  // plan puede tener citas de varias fisios, y solo la que lo trajo cobra el 30%.
+  traido_por?: string | null
   citas?: { fisioterapeuta?: string | null; estado?: string | null; fecha?: string | null; hora_inicio?: string | null }[]
   // Viene del join de Supabase: `pacientes(fisioterapeuta, traido_por_fisio)`.
   // En runtime es un objeto (la relación es muchos-a-uno), pero supabase-js infiere
@@ -113,14 +118,19 @@ const getPaciente = (plan: PlanFinanzas): PacienteFinanzas | null => {
   return Array.isArray(bruto) ? (bruto[0] ?? null) : bruto
 }
 
-// 30% solo para la fisio que trajo al paciente; 25% para el resto de empleadas.
-export const getTasaComision = (
-  fisio?: string | null,
-  paciente?: PacienteFinanzas | null
-) => {
+// Quién trajo al paciente en este plan. El plan manda; si no trae el dato
+// (consulta antigua) se cae al paciente. NULL = nadie, todas al 25%.
+export const getQuienTrajo = (plan: PlanFinanzas): string | null => {
+  if (plan.traido_por !== undefined) return plan.traido_por
+  const paciente = getPaciente(plan)
+  return paciente?.traido_por_fisio ? (paciente.fisioterapeuta ?? null) : null
+}
+
+// 30% SOLO para la fisio que trajo al paciente; el resto de empleadas al 25%.
+// La dueña nunca cobra comisión.
+export const getTasaComision = (fisio?: string | null, quienTrajo?: string | null) => {
   if (!fisio || fisio === DUENA) return 0
-  const loTrajoElla = !!paciente?.traido_por_fisio && paciente?.fisioterapeuta === fisio
-  return loTrajoElla ? COMISION_REFERIDO : COMISION_BASE
+  return fisio === quienTrajo ? COMISION_REFERIDO : COMISION_BASE
 }
 
 export const esCitaCompletada = (estado?: string | null) => {
@@ -155,7 +165,7 @@ export const getRecaudoPendienteDiezmo = (plan: PlanFinanzas) => {
 // `base` permite calcular sobre el total pagado o solo sobre el recaudo aún no
 // diezmado, que es lo único que cambia entre los dos usos.
 const calcularComisionesConBase = (plan: PlanFinanzas, recaudo: number) => {
-  const paciente = getPaciente(plan)
+  const quienTrajo = getQuienTrajo(plan)
   const valorPorSesion = getValorPorSesion(plan)
 
   // El recaudo se reparte sesión por sesión en ORDEN CRONOLÓGICO: si el paciente
@@ -177,7 +187,7 @@ const calcularComisionesConBase = (plan: PlanFinanzas, recaudo: number) => {
     const base = plan.cortesia ? valorPorSesion : Math.max(0, Math.min(valorPorSesion, restante))
     if (!plan.cortesia) restante -= base
     if (base <= 0) continue
-    porFisio[fisio] = (porFisio[fisio] || 0) + Math.round(base * getTasaComision(fisio, paciente))
+    porFisio[fisio] = (porFisio[fisio] || 0) + Math.round(base * getTasaComision(fisio, quienTrajo))
   }
   return porFisio
 }

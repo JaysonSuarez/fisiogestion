@@ -109,7 +109,7 @@ export default function DashboardPage() {
       // `fisioterapeuta, traido_por_fisio` del paciente son necesarios para saber si
       // la comisión es del 25% o del 30%; sin ellos el diezmo estimado aquí no
       // coincidiría con el de la pantalla de Diezmo.
-      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, monto_diezmado, diezmo_entregado, duracion_minutos, pacientes(nombre, id, fisioterapeuta, traido_por_fisio), citas(fisioterapeuta, estado, fecha, hora_inicio)').gte('fecha', startDate).lte('fecha', endDate)
+      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, monto_diezmado, diezmo_entregado, duracion_minutos, traido_por, pacientes(nombre, id, fisioterapeuta, traido_por_fisio), citas(fisioterapeuta, estado, fecha, hora_inicio)').gte('fecha', startDate).lte('fecha', endDate)
       let citasMesQuery = supabase.from('citas').select('duracion_minutos').eq('estado', 'completada').gte('fecha', startDate).lte('fecha', endDate)
       
       if (!esDuena(fisio)) {
