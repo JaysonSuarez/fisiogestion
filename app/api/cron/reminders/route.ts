@@ -64,8 +64,8 @@ export async function GET(req: Request) {
         const title = 'Recordatorio de Cita ⏰'
         const body = `Cita con ${cita.pacientes?.nombre} en 1 hora aproximadamente.`
         
-        await triggerPush(title, body, `/agenda?cita_id=${cita.id}`)
-        
+        await triggerPush(title, body, `/agenda?cita_id=${cita.id}`, cita.fisioterapeuta)
+
         await supabase.from('citas').update({ notificado_1h: true }).eq('id', cita.id)
         results.push(`Sent 1h reminder for ${cita.pacientes?.nombre}`)
       }
@@ -75,8 +75,8 @@ export async function GET(req: Request) {
         const title = '¡Cita en 10 minutos! 🚨'
         const body = `La sesión con ${cita.pacientes?.nombre} empieza pronto.`
         
-        await triggerPush(title, body, `/agenda?cita_id=${cita.id}`)
-        
+        await triggerPush(title, body, `/agenda?cita_id=${cita.id}`, cita.fisioterapeuta)
+
         await supabase.from('citas').update({ notificado_10m: true }).eq('id', cita.id)
         results.push(`Sent 10m reminder for ${cita.pacientes?.nombre}`)
       }
@@ -90,15 +90,24 @@ export async function GET(req: Request) {
   }
 }
 
-async function triggerPush(title: string, body: string, url: string) {
+// El recordatorio va SOLO a la fisioterapeuta de esa cita. Antes se enviaba sin
+// destinatario, y la Edge Function acababa notificando a todos los dispositivos
+// registrados: las otras fisioterapeutas recibían citas ajenas y los pacientes,
+// recordatorios que no eran para ellos.
+async function triggerPush(title: string, body: string, url: string, fisioterapeuta?: string) {
   const edgeFunctionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-push`
-  
+
   await fetch(edgeFunctionUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
     },
-    body: JSON.stringify({ title, body, url })
+    body: JSON.stringify({
+      title,
+      body,
+      url,
+      target_fisio: fisioterapeuta || 'Liliana',
+    })
   })
 }

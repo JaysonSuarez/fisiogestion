@@ -49,7 +49,9 @@ export default function DashboardPage() {
   })
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr())
-  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
+  // null hasta saber quién entró: así las tarjetas de dinero no parpadean en la
+  // pantalla de una empleada mientras se resuelve la sesión.
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta | null>(null)
 
   // Control de recordatorios
   const [activeReminder, setActiveReminder] = useState<any>(null)

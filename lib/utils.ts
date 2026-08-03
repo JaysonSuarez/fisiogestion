@@ -88,6 +88,14 @@ export const getFisioDeEmail = (email?: string | null): Fisioterapeuta => {
 
 export const esDuena = (fisio?: Fisioterapeuta | null) => fisio === DUENA
 
+// Secciones reservadas a la dueña: dinero, promociones y planes (que fijan precios).
+// Viven aquí y no repetidas en el menú y en el guardia de rutas, que es como
+// `/promociones` acabó oculto en un sitio y accesible en el otro.
+export const RUTAS_SOLO_DUENA = ['/finanzas', '/diezmo', '/ajustes', '/promociones', '/sesiones']
+
+export const esRutaSoloDuena = (path: string) =>
+  RUTAS_SOLO_DUENA.some(ruta => path === ruta || path.startsWith(`${ruta}/`))
+
 export interface PacienteFinanzas {
   fisioterapeuta?: string | null
   traido_por_fisio?: boolean | null

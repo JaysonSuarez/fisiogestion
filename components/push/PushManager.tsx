@@ -16,6 +16,8 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
   const [showIOSBanner, setShowIOSBanner] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
+  const [soportado, setSoportado] = useState(true);
+  const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
 
   useEffect(() => {
     const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
@@ -23,6 +25,10 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
 
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
+
+    // Android, Chrome, Edge y Firefox soportan push sin instalar nada; solo iOS
+    // exige añadir la app a la pantalla de inicio.
+    setSoportado('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
 
     if ('Notification' in window) {
       setPermission(Notification.permission);
@@ -44,6 +50,13 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
   const handleSubscribe = async () => {
     // Si ya está activo, abrir el modal de gestión
     if (permission === 'granted' && isSubscribed) {
+      setMensaje(null);
+      setShowModal(true);
+      return;
+    }
+
+    if (!soportado) {
+      setMensaje({ tipo: 'error', texto: 'Este navegador no admite notificaciones. Prueba con Chrome, Edge o Safari actualizado.' });
       setShowModal(true);
       return;
     }
@@ -53,27 +66,56 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
       if (success) {
         setIsSubscribed(true);
         setPermission('granted');
+        setMensaje(null);
         setShowModal(true); // Abrir modal al suscribirse con éxito para confirmar
+      } else {
+        const permisoActual = 'Notification' in window ? Notification.permission : 'default';
+        setPermission(permisoActual);
+        setMensaje({
+          tipo: 'error',
+          texto: permisoActual === 'denied'
+            ? 'Bloqueaste las notificaciones para este sitio. Habilítalas en los ajustes del navegador y vuelve a intentarlo.'
+            : 'No se pudo activar. Revisa que hayas aceptado el permiso de notificaciones.',
+        });
+        setShowModal(true);
       }
     } catch (e) {
       console.error('handleSubscribe error:', e);
+      setMensaje({ tipo: 'error', texto: 'No se pudo activar en este dispositivo. Inténtalo de nuevo.' });
+      setShowModal(true);
     }
   };
 
   const sendTestNotification = async () => {
     setTestLoading(true);
+    setMensaje(null);
     try {
-      const response = await fetch('/api/push/test', { method: 'POST' });
+      // Mandamos el endpoint de ESTE dispositivo para que la prueba llegue aquí y
+      // no a otro donde también se hayan activado las notificaciones.
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+
+      if (!sub) {
+        setMensaje({ tipo: 'error', texto: 'Este dispositivo ya no está suscrito. Desactiva y vuelve a activar las notificaciones.' });
+        setIsSubscribed(false);
+        return;
+      }
+
+      const response = await fetch('/api/push/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      });
       const result = await response.json();
-      
-      if (response.ok) {
-        alert('¡Mensaje enviado! Debería llegar a tu iPhone en unos segundos.');
+
+      if (response.ok && result?.success) {
+        setMensaje({ tipo: 'ok', texto: '¡Enviada! Debería llegarte a este dispositivo en unos segundos.' });
       } else {
-        alert('Error: ' + (result.error || 'No se pudo enviar la prueba'));
+        setMensaje({ tipo: 'error', texto: result?.error || 'No se pudo enviar la prueba.' });
       }
     } catch (error) {
       console.error('Error enviando prueba:', error);
-      alert('Error de conexión al intentar enviar la prueba.');
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al intentar enviar la prueba.' });
     } finally {
       setTestLoading(false);
     }
@@ -148,31 +190,52 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
                 <X size={20} />
               </button>
 
-              <div className="inline-flex p-4 bg-emerald-50 rounded-[24px] mb-6">
-                <CheckCircle2 className="text-emerald-500" size={40} />
+              <div className={`inline-flex p-4 rounded-[24px] mb-6 ${isActive ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                {isActive
+                  ? <CheckCircle2 className="text-emerald-500" size={40} />
+                  : <Bell className="text-rose-400" size={40} />}
               </div>
 
-              <h3 className="text-2xl font-black text-rose-950 italic mb-2">¡Todo Listo!</h3>
+              <h3 className="text-2xl font-black text-rose-950 italic mb-2">
+                {isActive ? '¡Todo Listo!' : 'Notificaciones'}
+              </h3>
               <p className="text-rose-400 text-sm font-medium mb-8 leading-relaxed">
-                Tus notificaciones están activas. Recibirás recordatorios de citas automáticamente.
+                {isActive
+                  ? 'Este dispositivo recibirá los recordatorios de citas automáticamente.'
+                  : 'Actívalas para recibir los recordatorios de citas en este dispositivo.'}
               </p>
 
               <div className="space-y-3">
-                <button
-                  onClick={sendTestNotification}
-                  disabled={testLoading}
-                  className="w-full py-4 bg-rose-500 text-white rounded-3xl font-bold text-sm shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all flex items-center justify-center gap-2 group active:scale-95 disabled:opacity-50"
-                >
-                  {testLoading ? (
-                    <Loader2 className="animate-spin" size={18} />
-                  ) : (
-                    <>Enviar Prueba <Send size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" /></>
-                  )}
-                </button>
-                
+                {isActive && (
+                  <button
+                    onClick={sendTestNotification}
+                    disabled={testLoading}
+                    className="w-full py-4 bg-rose-500 text-white rounded-3xl font-bold text-sm shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all flex items-center justify-center gap-2 group active:scale-95 disabled:opacity-50"
+                  >
+                    {testLoading ? (
+                      <Loader2 className="animate-spin" size={18} />
+                    ) : (
+                      <>Enviar prueba a este dispositivo <Send size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" /></>
+                    )}
+                  </button>
+                )}
+
+                {mensaje && (
+                  <div className={`p-4 rounded-2xl text-xs text-left font-bold leading-snug ${
+                    mensaje.tipo === 'ok'
+                      ? 'bg-emerald-50 text-emerald-600'
+                      : 'bg-rose-50 text-rose-600'
+                  }`}>
+                    {mensaje.texto}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 p-4 bg-rose-50/50 rounded-2xl text-[10px] text-rose-400 text-left font-bold uppercase tracking-wider leading-tight">
                   <Info size={16} className="shrink-0" />
-                  <span>Si no recibes el mensaje en 1 minuto, verifica los ajustes de tu iPhone.</span>
+                  <span>
+                    Cada dispositivo se activa por separado. Si no llega en 1 minuto, revisa los
+                    permisos de notificación del navegador.
+                  </span>
                 </div>
               </div>
             </div>

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, CalendarDays, Wallet,
   ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars, Settings, FileText, Ticket
 } from 'lucide-react'
-import { getFisioDeEmail, esDuena } from '@/lib/utils'
+import { getFisioDeEmail, esDuena, esRutaSoloDuena } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
 
 const navItems = [
@@ -27,7 +27,10 @@ export default function Sidebar() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isVisible, setIsVisible] = useState(true)
   const lastScrollY = useRef(0)
-  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
+  // Arranca en null a propósito: hasta saber quién entró se asume el menú
+  // restringido. Si el valor inicial fuera 'Liliana', una empleada vería aparecer
+  // y desaparecer Finanzas, Promos y Planes en cada carga.
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta | null>(null)
   const [userProfile, setUserProfile] = useState({ name: 'Ft. Liliana G.', initial: 'LG' })
 
   useEffect(() => {
@@ -40,12 +43,9 @@ export default function Sidebar() {
     })
   }, [])
 
-  const filteredNavItems = navItems.filter(item => {
-    if (!esDuena(fisioActiva) && (item.href === '/finanzas' || item.href === '/diezmo' || item.href === '/ajustes')) {
-      return false
-    }
-    return true
-  })
+  const filteredNavItems = navItems.filter(item =>
+    esDuena(fisioActiva) || !esRutaSoloDuena(item.href)
+  )
 
   // Scroll handler to hide/show mobile nav
   useEffect(() => {

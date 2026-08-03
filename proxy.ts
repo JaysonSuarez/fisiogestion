@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { getFisioDeEmail, esDuena } from '@/lib/utils'
+import { getFisioDeEmail, esDuena, esRutaSoloDuena } from '@/lib/utils'
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -77,10 +77,11 @@ export async function proxy(request: NextRequest) {
     }
   } else {
     // === ADMIN DASHBOARD ROUTING ===
-    // Solo la dueña entra a las rutas de dinero; cualquier otra fisioterapeuta no.
+    // Solo la dueña entra a las rutas de dinero, promociones y planes.
+    // La lista vive en lib/utils junto al menú, para que no se desincronicen:
+    // así fue como /promociones acabó oculto en el menú pero accesible por URL.
     const esEmpleada = !!user && !esDuena(getFisioDeEmail(user.email))
-    const protectedAdminRoutes = ['/finanzas', '/diezmo', '/ajustes']
-    const isProtectedAdminRoute = protectedAdminRoutes.some(route => path.startsWith(route))
+    const isProtectedAdminRoute = esRutaSoloDuena(path)
 
     // Redirect to admin login if not authenticated and trying to access a protected admin route
     // Note: /agendar is matched by the route path, so we exclude it explicitly
