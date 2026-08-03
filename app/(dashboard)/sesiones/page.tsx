@@ -7,15 +7,16 @@ import { ClipboardPlus, Activity, CheckCircle, Clock, AlertCircle, Loader2, Spar
 import NotificationModal from '@/components/ui/NotificationModal'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
-import { formatCOP, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr } from '@/lib/utils'
+import { formatCOP, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr, getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 export default function SesionesPage() {
   const [loading, setLoading] = useState(true)
   const [sesiones, setSesiones] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr())
-  const [isLuisa, setIsLuisa] = useState(false)
-  
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
+
   // Edit State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<any>(null)
@@ -38,8 +39,8 @@ export default function SesionesPage() {
     try {
       setLoading(true)
       const user = await getCachedUser()
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      setIsLuisa(!!isLu)
+      const fisio = getFisioDeEmail(user?.email)
+      setFisioActiva(fisio)
 
       const [year, month] = selectedMonth.split('-')
       const startDate = `${year}-${month}-01`
@@ -87,8 +88,8 @@ export default function SesionesPage() {
       }
         
       let filteredData = combinedSessions
-      if (isLu) {
-        filteredData = filteredData.filter((s: any) => s.pacientes?.fisioterapeuta === 'Luisa')
+      if (!esDuena(fisio)) {
+        filteredData = filteredData.filter((s: any) => s.pacientes?.fisioterapeuta === fisio)
       }
       setSesiones(filteredData)
     } finally {
@@ -381,7 +382,7 @@ export default function SesionesPage() {
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded-full">{s.fecha}</span>
                        <span className="text-rose-100">/</span>
-                       {!isLuisa ? (
+                       {esDuena(fisioActiva) ? (
                          <span className="text-sm font-black text-rose-900">{formatCOP(s.valor)}</span>
                        ) : (
                          <span className="text-sm font-black text-rose-400 uppercase tracking-widest text-[10px]">Plan Activo</span>
@@ -402,7 +403,7 @@ export default function SesionesPage() {
                     >
                       Editar
                     </button>
-                    {!isLuisa && s.estado_pago === 'pendiente' && (
+                    {esDuena(fisioActiva) && s.estado_pago === 'pendiente' && (
                       <Link 
                         href={`/finanzas?paciente=${s.paciente_id}`}
                         className="text-[10px] font-black text-white bg-rose-950 hover:bg-rose-900 px-5 py-2 rounded-xl transition-all uppercase tracking-[0.2em] shadow-lg shadow-rose-950/20"
@@ -436,7 +437,7 @@ export default function SesionesPage() {
               </div>
               
               <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-                 {!isLuisa && (
+                 {esDuena(fisioActiva) && (
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                       <div className="bg-rose-50/50 p-6 rounded-[32px] border-4 border-white shadow-inner">
                         <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-3 block">Precio Total del Plan</label>
@@ -492,8 +493,7 @@ export default function SesionesPage() {
                                  onChange={(e) => handleUpdateCitaFisioterapeuta(cita.id, e.target.value)}
                                  className="bg-white px-3 py-2 rounded-xl text-xs font-black text-rose-950 border border-rose-100 outline-none focus:border-rose-300 w-full cursor-pointer uppercase tracking-widest text-[9px]"
                                >
-                                 <option value="Liliana">Liliana</option>
-                                 <option value="Luisa">Luisa</option>
+                                 {FISIOTERAPEUTAS.map(f => <option key={f} value={f}>{f}</option>)}
                                </select>
                                <div className="flex items-center justify-between gap-4">
                                  <div className="flex items-center gap-2">

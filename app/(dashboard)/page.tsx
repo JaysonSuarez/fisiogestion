@@ -32,7 +32,8 @@ import SolicitudesWidget from '@/components/ui/SolicitudesWidget'
 import NotificationModal from '@/components/ui/NotificationModal'
 import PushManager from '@/components/push/PushManager'
 import { OfflineSync } from '@/lib/offline-sync'
-import { formatCOP, format12h, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr, getMonthDateRange, getRecaudoPendienteDiezmo, calcularGananciaLilianaPendienteDiezmo, calcularGananciaLiliana, calcularDiezmo } from '@/lib/utils'
+import { formatCOP, format12h, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr, getMonthDateRange, getRecaudoPendienteDiezmo, calcularGananciaLilianaPendienteDiezmo, calcularGananciaLiliana, calcularDiezmo, getFisioDeEmail, esDuena } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -48,7 +49,7 @@ export default function DashboardPage() {
   })
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr())
-  const [isLuisa, setIsLuisa] = useState(false)
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
 
   // Control de recordatorios
   const [activeReminder, setActiveReminder] = useState<any>(null)
@@ -82,19 +83,19 @@ export default function DashboardPage() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      setIsLuisa(!!isLu)
+      const fisio = getFisioDeEmail(user?.email)
+      setFisioActiva(fisio)
 
       const { startDate, endDate } = getMonthDateRange(selectedMonth)
 
       let pacientesActivos = 0
-      
-      if (isLu) {
+
+      if (!esDuena(fisio)) {
         const { count } = await supabase
           .from('pacientes')
           .select('*', { count: 'exact', head: true })
           .eq('estado', 'activo')
-          .eq('fisioterapeuta', 'Luisa')
+          .eq('fisioterapeuta', fisio)
         pacientesActivos = count || 0
       } else {
         const { count } = await supabase
@@ -105,12 +106,15 @@ export default function DashboardPage() {
       }
 
       let citasHoyQuery = supabase.from('citas').select('*, pacientes(nombre, telefono)').eq('fecha', todayStr).neq('estado', 'cancelada')
-      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, monto_diezmado, diezmo_entregado, duracion_minutos, pacientes(nombre, id), citas(fisioterapeuta, estado)').gte('fecha', startDate).lte('fecha', endDate)
+      // `fisioterapeuta, traido_por_fisio` del paciente son necesarios para saber si
+      // la comisión es del 25% o del 30%; sin ellos el diezmo estimado aquí no
+      // coincidiría con el de la pantalla de Diezmo.
+      let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, monto_diezmado, diezmo_entregado, duracion_minutos, pacientes(nombre, id, fisioterapeuta, traido_por_fisio), citas(fisioterapeuta, estado, fecha, hora_inicio)').gte('fecha', startDate).lte('fecha', endDate)
       let citasMesQuery = supabase.from('citas').select('duracion_minutos').eq('estado', 'completada').gte('fecha', startDate).lte('fecha', endDate)
       
-      if (isLu) {
-        citasHoyQuery = citasHoyQuery.eq('fisioterapeuta', 'Luisa')
-        citasMesQuery = citasMesQuery.eq('fisioterapeuta', 'Luisa')
+      if (!esDuena(fisio)) {
+        citasHoyQuery = citasHoyQuery.eq('fisioterapeuta', fisio)
+        citasMesQuery = citasMesQuery.eq('fisioterapeuta', fisio)
       }
 
       const [
@@ -127,7 +131,7 @@ export default function DashboardPage() {
 
       const porCobrar = todasSesiones?.reduce((acc, s) => acc + (s.valor - (s.monto_pagado || 0)), 0) || 0
       const ingresoGlobal = todasSesiones?.reduce((acc, s) => acc + (s.monto_pagado || 0), 0) || 0
-      // Ganancia de Liliana (recaudado − comisión de Luisa) sobre los ingresos aún no diezmados del mes
+      // Ganancia de Liliana (recaudado − comisiones de las fisios) sobre los ingresos aún no diezmados del mes
       const gananciaDiezmable = todasSesiones?.filter(s => !s.diezmo_entregado && getRecaudoPendienteDiezmo(s) > 0).reduce((acc, s: any) => acc + calcularGananciaLilianaPendienteDiezmo(s), 0) || 0
 
       const deudoresMap: Record<string, { nombre: string, deuda: number }> = {}
@@ -397,7 +401,7 @@ export default function DashboardPage() {
               <h2 className="font-display italic text-5xl md:text-6xl text-rose-950 flex items-center gap-3">
                 <Sparkles className="text-rose-400 animate-pulse hidden md:block" size={40} />
                 <Sparkles className="text-rose-400 animate-pulse md:hidden" size={28} />
-                Hola, Ft. {isLuisa ? 'Luisa' : 'Liliana'}
+                Hola, Ft. {fisioActiva}
               </h2>
               
               <div className="flex items-center gap-2">
@@ -462,7 +466,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {!isLuisa ? (
+        {esDuena(fisioActiva) ? (
           <div className="card metric-card border-none bg-white shadow-xl shadow-rose-100/30 relative overflow-hidden group border border-rose-50">
             <div className="absolute -right-4 -top-4 text-rose-100/20 group-hover:scale-110 transition-transform">
               <TrendingUp size={100} />
@@ -488,7 +492,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!isLuisa && (
+        {esDuena(fisioActiva) && (
           <div className="card metric-card border-none bg-rose-50/50 shadow-xl shadow-rose-100/10 relative overflow-hidden group border border-rose-100/50">
             <div className="absolute -right-4 -top-4 text-rose-200/20 group-hover:scale-110 transition-transform">
               <Activity size={100} />
@@ -564,7 +568,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {!isLuisa && (
+        {esDuena(fisioActiva) && (
           <div className="flex flex-col gap-10">
             <div className="card bg-white border-2 border-rose-50 shadow-xl shadow-rose-100/20 p-8 relative overflow-hidden">
               <div className="absolute -right-8 -bottom-8 text-rose-50/30">

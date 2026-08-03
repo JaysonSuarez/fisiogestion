@@ -11,6 +11,8 @@ import {
   Activity,
   Loader2
 } from 'lucide-react'
+import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 const formatCOP = (valor: number) => {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
@@ -24,7 +26,7 @@ export default function PacientesPage() {
   const [loading, setLoading] = useState(true)
   const [pacientes, setPacientes] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [isLuisa, setIsLuisa] = useState(false)
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
 
   async function loadPacientes() {
     // 1. Cargar desde caché (Offline First)
@@ -36,16 +38,16 @@ export default function PacientesPage() {
 
     try {
       const user = await getCachedUser()
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      setIsLuisa(!!isLu)
+      const fisio = getFisioDeEmail(user?.email)
+      setFisioActiva(fisio)
 
       let query = supabase
         .from('pacientes')
         .select('*, sesiones(valor, estado_pago)')
         .order('nombre')
 
-      if (isLu) {
-        query = query.eq('fisioterapeuta', 'Luisa')
+      if (!esDuena(fisio)) {
+        query = query.eq('fisioterapeuta', fisio)
       }
 
       const { data: pacientesRaw } = await query
@@ -142,15 +144,14 @@ export default function PacientesPage() {
                   <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.estado === 'activo' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-400'}`}>
                     {p.estado === 'activo' ? 'Activo' : 'Pausa'}
                   </div>
-                  {!isLuisa && (
-                    <select 
+                  {esDuena(fisioActiva) && (
+                    <select
                       value={p.fisioterapeuta || 'Liliana'}
                       onChange={(e) => handleAssignTherapist(p.id, e.target.value)}
                       className="text-[8px] font-black rounded-lg border border-rose-100 px-1.5 py-0.5 bg-white text-rose-950 uppercase tracking-wider outline-none shadow-sm cursor-pointer"
                       onClick={(e) => e.preventDefault()}
                     >
-                      <option value="Liliana">Liliana</option>
-                      <option value="Luisa">Luisa</option>
+                      {FISIOTERAPEUTAS.map(f => <option key={f} value={f}>{f}</option>)}
                     </select>
                   )}
                 </div>
@@ -163,7 +164,7 @@ export default function PacientesPage() {
                     {p.numSesiones}
                   </div>
                 </div>
-                {!isLuisa && (
+                {esDuena(fisioActiva) && (
                   <div>
                      <div className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-1">Deuda</div>
                     <div className={`text-sm font-black ${p.deuda > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
@@ -189,8 +190,8 @@ export default function PacientesPage() {
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest">Paciente</th>
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest">Diagnóstico</th>
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-center">Sesiones</th>
-                {!isLuisa && <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-right">Saldo</th>}
-                {!isLuisa && <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-center">Fisioterapeuta</th>}
+                {esDuena(fisioActiva) && <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-right">Saldo</th>}
+                {esDuena(fisioActiva) && <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-center">Fisioterapeuta</th>}
                 <th className="px-8 py-5 text-[10px] font-black text-rose-300 uppercase tracking-widest text-center">Estado</th>
                 <th className="px-8 py-5"></th>
               </tr>
@@ -213,7 +214,7 @@ export default function PacientesPage() {
                   <td className="px-8 py-6 text-center">
                     <div className="text-sm font-black text-rose-950">{p.numSesiones}</div>
                   </td>
-                  {!isLuisa && (
+                  {esDuena(fisioActiva) && (
                     <td className="px-8 py-6 text-right">
                       <div className={`text-sm font-black ${p.deuda > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
                         {p.deuda > 0 ? formatCOP(p.deuda) : formatCOP(p.pagado)}
@@ -223,15 +224,14 @@ export default function PacientesPage() {
                       </div>
                     </td>
                   )}
-                  {!isLuisa && (
+                  {esDuena(fisioActiva) && (
                     <td className="px-8 py-6 text-center">
-                      <select 
+                      <select
                         value={p.fisioterapeuta || 'Liliana'}
                         onChange={(e) => handleAssignTherapist(p.id, e.target.value)}
                         className="text-[9px] font-black rounded-lg border border-rose-100 px-2 py-1 bg-white text-rose-950 uppercase tracking-widest outline-none shadow-sm cursor-pointer"
                       >
-                        <option value="Liliana">Liliana</option>
-                        <option value="Luisa">Luisa</option>
+                        {FISIOTERAPEUTAS.map(f => <option key={f} value={f}>{f}</option>)}
                       </select>
                     </td>
                   )}

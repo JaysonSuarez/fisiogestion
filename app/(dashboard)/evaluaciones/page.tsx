@@ -6,6 +6,7 @@ import { supabase, getCachedUser } from '@/lib/supabase'
 import { FileText, Plus, Search, Loader2, ArrowRight, Trash2, Flower2 } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import { useRouter } from 'next/navigation'
+import { getFisioDeEmail, esDuena } from '@/lib/utils'
 
 export default function EvaluacionesIndexPage() {
   const [evaluaciones, setEvaluaciones] = useState<any[]>([])
@@ -22,7 +23,7 @@ export default function EvaluacionesIndexPage() {
   async function loadData() {
     try {
       const user = await getCachedUser()
-      const isLu = user?.email?.toLowerCase().includes('luisa')
+      const fisio = getFisioDeEmail(user?.email)
 
       let query = supabase
         .from('evaluaciones')
@@ -30,8 +31,8 @@ export default function EvaluacionesIndexPage() {
         .order('created_at', { ascending: false })
         .limit(20)
 
-      if (isLu) {
-        query = query.eq('fisioterapeuta', 'Luisa')
+      if (!esDuena(fisio)) {
+        query = query.eq('fisioterapeuta', fisio)
       }
 
       let pacQuery = supabase
@@ -40,8 +41,8 @@ export default function EvaluacionesIndexPage() {
         .eq('estado', 'activo')
         .order('nombre')
 
-      if (isLu) {
-        pacQuery = pacQuery.eq('fisioterapeuta', 'Luisa')
+      if (!esDuena(fisio)) {
+        pacQuery = pacQuery.eq('fisioterapeuta', fisio)
       }
 
       const [evalRes, pacRes] = await Promise.all([

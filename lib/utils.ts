@@ -1,3 +1,5 @@
+import type { Fisioterapeuta } from '@/types'
+
 export const formatCOP = (valor: number) => {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
 }
@@ -61,12 +63,35 @@ export const getMonthDateRange = (yyyyMM: string) => {
   }
 }
 
-// ─── Reparto de ingresos Liliana / Luisa ────────────────────────────────────
+// ─── Reparto de ingresos entre la dueña y las fisioterapeutas ───────────────
 // Regla de negocio: el valor de un plan se reparte por sesión. Cada sesión que
-// REALIZA Luisa (cita completada asignada a Luisa) le genera un 25% de comisión;
-// el resto es ganancia de Liliana (dueña de la clínica). Liliana también se queda
-// el 100% de las sesiones que ella misma realiza. El diezmo (10%) sale solo de la
-// ganancia de Liliana; Luisa no diezma.
+// REALIZA una empleada (cita completada asignada a ella) le genera un 25% de
+// comisión, o un 30% si fue ella quien trajo al paciente. El resto es ganancia de
+// Liliana (dueña de la clínica), que además se queda el 100% de las sesiones que
+// ella misma realiza. El diezmo (10%) sale solo de la ganancia de Liliana; las
+// empleadas no diezman.
+
+export const FISIOTERAPEUTAS: Fisioterapeuta[] = ['Liliana', 'Luisa', 'Jeniffer']
+// Liliana es la dueña: lo que ella atiende es ganancia, no comisión.
+export const DUENA: Fisioterapeuta = 'Liliana'
+export const EMPLEADAS = FISIOTERAPEUTAS.filter(f => f !== DUENA)
+export const COMISION_BASE = 0.25
+export const COMISION_REFERIDO = 0.30
+
+// Quién está usando la app. Antes esto era un booleano `isLuisa` repetido en una
+// docena de pantallas; con tres fisioterapeutas hace falta saber CUÁL es, no solo
+// si es la dueña o no (si no, Jeniffer entraría identificada como Liliana).
+export const getFisioDeEmail = (email?: string | null): Fisioterapeuta => {
+  const correo = (email || '').toLowerCase()
+  return FISIOTERAPEUTAS.find(f => correo.includes(f.toLowerCase())) ?? DUENA
+}
+
+export const esDuena = (fisio?: Fisioterapeuta | null) => fisio === DUENA
+
+export interface PacienteFinanzas {
+  fisioterapeuta?: string | null
+  traido_por_fisio?: boolean | null
+}
 
 export interface PlanFinanzas {
   valor: number
@@ -74,7 +99,28 @@ export interface PlanFinanzas {
   monto_diezmado?: number
   duracion_minutos?: number
   cortesia?: boolean
-  citas?: { fisioterapeuta?: string | null; estado?: string | null }[]
+  citas?: { fisioterapeuta?: string | null; estado?: string | null; fecha?: string | null; hora_inicio?: string | null }[]
+  // Viene del join de Supabase: `pacientes(fisioterapeuta, traido_por_fisio)`.
+  // En runtime es un objeto (la relación es muchos-a-uno), pero supabase-js infiere
+  // el tipo como array, así que aceptamos ambas formas y normalizamos.
+  pacientes?: PacienteFinanzas | PacienteFinanzas[] | null
+  paciente?: PacienteFinanzas | PacienteFinanzas[] | null
+}
+
+const getPaciente = (plan: PlanFinanzas): PacienteFinanzas | null => {
+  const bruto = plan.pacientes ?? plan.paciente ?? null
+  if (!bruto) return null
+  return Array.isArray(bruto) ? (bruto[0] ?? null) : bruto
+}
+
+// 30% solo para la fisio que trajo al paciente; 25% para el resto de empleadas.
+export const getTasaComision = (
+  fisio?: string | null,
+  paciente?: PacienteFinanzas | null
+) => {
+  if (!fisio || fisio === DUENA) return 0
+  const loTrajoElla = !!paciente?.traido_por_fisio && paciente?.fisioterapeuta === fisio
+  return loTrajoElla ? COMISION_REFERIDO : COMISION_BASE
 }
 
 export const esCitaCompletada = (estado?: string | null) => {
@@ -102,46 +148,66 @@ export const getRecaudoPendienteDiezmo = (plan: PlanFinanzas) => {
   return Math.max(0, pagado - diezmado)
 }
 
-// Comisión que le corresponde a Luisa por un plan: 25% del valor de las sesiones
-// que ella realizó (citas completadas asignadas a Luisa), pero SOLO sobre dinero
-// efectivamente pagado. Luisa no puede cobrar por trabajo que el paciente aún no
+// Comisión que le corresponde a cada empleada por un plan: su tasa sobre el valor
+// de las sesiones que ella realizó (citas completadas asignadas a ella), pero SOLO
+// sobre dinero efectivamente pagado. Nadie cobra por trabajo que el paciente aún no
 // ha pagado, así que la base se limita a lo recaudado: min(valor trabajado, pagado).
-export const calcularComisionLuisa = (plan: PlanFinanzas) => {
-  const citas = plan.citas || []
-  const sesionesLuisa = citas.filter(c => c.fisioterapeuta === 'Luisa' && esCitaCompletada(c.estado)).length
-  if (sesionesLuisa === 0) return 0
-  const valorTrabajadoLuisa = getValorPorSesion(plan) * sesionesLuisa
-  const baseCobrable = plan.cortesia
-    ? valorTrabajadoLuisa
-    : Math.min(valorTrabajadoLuisa, plan.monto_pagado || 0)
-  return Math.round(baseCobrable * 0.25)
+// `base` permite calcular sobre el total pagado o solo sobre el recaudo aún no
+// diezmado, que es lo único que cambia entre los dos usos.
+const calcularComisionesConBase = (plan: PlanFinanzas, recaudo: number) => {
+  const paciente = getPaciente(plan)
+  const valorPorSesion = getValorPorSesion(plan)
+
+  // El recaudo se reparte sesión por sesión en ORDEN CRONOLÓGICO: si el paciente
+  // no ha pagado todo el plan, las últimas sesiones quedan sin cubrir y esa
+  // comisión aún no se debe. Ordenar importa porque ahora las tasas difieren
+  // (25% / 30%): repartir en el orden del array daría un resultado distinto según
+  // cómo viniera la consulta. Es el mismo criterio que usa la pantalla de Finanzas
+  // para liquidar, así que ambas cuadran.
+  const completadas = (plan.citas || [])
+    .filter(c => esCitaCompletada(c.estado) && c.fisioterapeuta && c.fisioterapeuta !== DUENA)
+    .slice()
+    .sort((a, b) =>
+      `${a.fecha ?? ''}${a.hora_inicio ?? ''}`.localeCompare(`${b.fecha ?? ''}${b.hora_inicio ?? ''}`))
+
+  const porFisio: Record<string, number> = {}
+  let restante = recaudo
+  for (const cita of completadas) {
+    const fisio = cita.fisioterapeuta as string
+    const base = plan.cortesia ? valorPorSesion : Math.max(0, Math.min(valorPorSesion, restante))
+    if (!plan.cortesia) restante -= base
+    if (base <= 0) continue
+    porFisio[fisio] = (porFisio[fisio] || 0) + Math.round(base * getTasaComision(fisio, paciente))
+  }
+  return porFisio
 }
 
-// Comisión de Luisa correspondiente de manera proporcional al recaudo pendiente de diezmo
-export const calcularComisionLuisaPendienteDiezmo = (plan: PlanFinanzas) => {
-  const citas = plan.citas || []
-  const sesionesLuisa = citas.filter(c => c.fisioterapeuta === 'Luisa' && esCitaCompletada(c.estado)).length
-  if (sesionesLuisa === 0) return 0
-  const valorTrabajadoLuisa = getValorPorSesion(plan) * sesionesLuisa
-  const recaudoPendiente = getRecaudoPendienteDiezmo(plan)
-  const baseCobrable = plan.cortesia
-    ? valorTrabajadoLuisa
-    : Math.min(valorTrabajadoLuisa, recaudoPendiente)
-  return Math.round(baseCobrable * 0.25)
-}
+// Comisión de cada empleada sobre lo recaudado del plan
+export const calcularComisionesFisios = (plan: PlanFinanzas) =>
+  calcularComisionesConBase(plan, plan.monto_pagado || 0)
 
-// Ganancia real de Liliana sobre lo RECAUDADO de un plan (recaudado − comisión Luisa).
+export const calcularComisionTotal = (plan: PlanFinanzas) =>
+  Object.values(calcularComisionesFisios(plan)).reduce((a, b) => a + b, 0)
+
+// Comisiones correspondientes de manera proporcional al recaudo pendiente de diezmo
+export const calcularComisionesFisiosPendienteDiezmo = (plan: PlanFinanzas) =>
+  calcularComisionesConBase(plan, getRecaudoPendienteDiezmo(plan))
+
+export const calcularComisionTotalPendienteDiezmo = (plan: PlanFinanzas) =>
+  Object.values(calcularComisionesFisiosPendienteDiezmo(plan)).reduce((a, b) => a + b, 0)
+
+// Ganancia real de Liliana sobre lo RECAUDADO de un plan (recaudado − comisiones).
 // Se calcula sobre monto_pagado porque el diezmo/ganancia se computan sobre dinero
 // efectivamente recibido, no proyectado. Nunca negativo.
 export const calcularGananciaLiliana = (plan: PlanFinanzas) => {
   const recaudado = plan.monto_pagado || 0
-  return Math.max(0, recaudado - calcularComisionLuisa(plan))
+  return Math.max(0, recaudado - calcularComisionTotal(plan))
 }
 
 // Ganancia real de Liliana sobre el recaudo PENDIENTE DE DIEZMO de un plan
 export const calcularGananciaLilianaPendienteDiezmo = (plan: PlanFinanzas) => {
   const recaudoPendiente = getRecaudoPendienteDiezmo(plan)
-  return Math.max(0, recaudoPendiente - calcularComisionLuisaPendienteDiezmo(plan))
+  return Math.max(0, recaudoPendiente - calcularComisionTotalPendienteDiezmo(plan))
 }
 
 export const DIEZMO_PORCENTAJE = 0.1

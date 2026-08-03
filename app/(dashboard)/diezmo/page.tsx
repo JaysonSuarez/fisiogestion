@@ -4,19 +4,19 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { TrendingUp, CheckCircle, AlertCircle, Wallet, Info, Loader2, Heart, Sparkles, Check } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
-import { 
-  formatCOP, 
-  getRecaudoPendienteDiezmo, 
-  calcularComisionLuisaPendienteDiezmo, 
-  calcularGananciaLilianaPendienteDiezmo, 
-  calcularDiezmo 
+import {
+  formatCOP,
+  getRecaudoPendienteDiezmo,
+  calcularComisionTotalPendienteDiezmo,
+  calcularGananciaLilianaPendienteDiezmo,
+  calcularDiezmo
 } from '@/lib/utils'
 
 export default function DiezmoPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [recaudadoBruto, setRecaudadoBruto] = useState(0)
-  const [comisionLuisa, setComisionLuisa] = useState(0)
+  const [comisionFisios, setComisionFisios] = useState(0)
   const [gananciaLiliana, setGananciaLiliana] = useState(0)
   const [totalDiezmo, setTotalDiezmo] = useState(0)
   
@@ -30,20 +30,21 @@ export default function DiezmoPage() {
 
   async function loadTotals() {
     try {
-      // Traemos las sesiones que aún tienen recaudo pendiente por diezmar
+      // Traemos las sesiones que aún tienen recaudo pendiente por diezmar.
+      // `pacientes(...)` hace falta para saber si la fisio trajo al paciente (30%).
       const { data } = await supabase
         .from('sesiones')
-        .select('valor, monto_pagado, monto_diezmado, duracion_minutos, cortesia, citas(fisioterapeuta, estado)')
+        .select('valor, monto_pagado, monto_diezmado, duracion_minutos, cortesia, citas(fisioterapeuta, estado, fecha, hora_inicio), pacientes(fisioterapeuta, traido_por_fisio)')
         .eq('diezmo_entregado', false)
 
       // Los planes de cortesía no generan diezmo. Filtramos los que tengan recaudo pendiente de diezmo > 0
       const planes = (data || []).filter((s: any) => !s.cortesia && getRecaudoPendienteDiezmo(s) > 0)
       const bruto = planes.reduce((acc, s: any) => acc + getRecaudoPendienteDiezmo(s), 0)
-      const comision = planes.reduce((acc, s: any) => acc + calcularComisionLuisaPendienteDiezmo(s), 0)
+      const comision = planes.reduce((acc, s: any) => acc + calcularComisionTotalPendienteDiezmo(s), 0)
       const ganancia = planes.reduce((acc, s: any) => acc + calcularGananciaLilianaPendienteDiezmo(s), 0)
 
       setRecaudadoBruto(bruto)
-      setComisionLuisa(comision)
+      setComisionFisios(comision)
       setGananciaLiliana(ganancia)
       setTotalDiezmo(calcularDiezmo(ganancia))
     } finally {
@@ -198,8 +199,8 @@ export default function DiezmoPage() {
                 <span className="text-base font-black text-slate-800">{formatCOP(recaudadoBruto)}</span>
               </div>
               <div className="flex items-center justify-between p-4 bg-amber-50/60 rounded-2xl border border-amber-100">
-                <span className="text-sm font-bold text-amber-700">− Comisión de Luisa (25%)</span>
-                <span className="text-base font-black text-amber-600">−{formatCOP(comisionLuisa)}</span>
+                <span className="text-sm font-bold text-amber-700">− Comisiones de fisioterapeutas</span>
+                <span className="text-base font-black text-amber-600">−{formatCOP(comisionFisios)}</span>
               </div>
               <div className="flex items-center justify-between p-4 bg-rose-50/60 rounded-2xl border border-rose-100">
                 <span className="text-sm font-black text-rose-800">= Ganancia de Liliana</span>

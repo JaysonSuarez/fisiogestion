@@ -24,8 +24,9 @@ import {
 import NotificationModal from '@/components/ui/NotificationModal'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import { OfflineSync } from '@/lib/offline-sync'
-import { format12h, getIniciales } from '@/lib/utils'
+import { format12h, getIniciales, getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import { isHolidayColombia } from '@/lib/colombian-holidays'
+import type { Fisioterapeuta } from '@/types'
 
 const HORAS = ['07:00','08:00','09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00']
 
@@ -47,7 +48,7 @@ const esCompletada = (estado?: string) => {
 export default function AgendaPage() {
   const [loading, setLoading] = useState(true)
   const [citas, setCitas] = useState<any[]>([])
-  const [isLuisa, setIsLuisa] = useState(false)
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
 
   const now = new Date()
   const [startOfCurrentWeek, setStartOfCurrentWeek] = useState(startOfWeek(now, { weekStartsOn: 1 }))
@@ -93,8 +94,8 @@ export default function AgendaPage() {
 
     try {
       const user = await getCachedUser()
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      setIsLuisa(!!isLu)
+      const fisio = getFisioDeEmail(user?.email)
+      setFisioActiva(fisio)
 
       let query = supabase
         .from('citas')
@@ -103,7 +104,7 @@ export default function AgendaPage() {
         .lte('fecha', format(addDays(startOfCurrentWeek, 6), 'yyyy-MM-dd'))
         .order('hora_inicio')
 
-      if (isLu) query = query.eq('fisioterapeuta', 'Luisa')
+      if (!esDuena(fisio)) query = query.eq('fisioterapeuta', fisio)
 
       const { data } = await query
       if (data) { setCitas(data); OfflineSync.saveToCache(cacheKey, data) }
@@ -204,7 +205,7 @@ export default function AgendaPage() {
     setLoadingDay(true)
     try {
       let q = supabase.from('citas').select('id, hora_inicio, estado, fisioterapeuta').eq('fecha', fecha).neq('estado', 'cancelada')
-      if (isLuisa) q = q.eq('fisioterapeuta', 'Luisa')
+      if (!esDuena(fisioActiva)) q = q.eq('fisioterapeuta', fisioActiva)
       const { data } = await q
       setDayCitas(data || [])
     } finally {
@@ -213,7 +214,7 @@ export default function AgendaPage() {
   }
 
   // Un slot solo está ocupado si la MISMA terapeuta ya tiene cita ahí.
-  // Liliana y Luisa pueden coincidir en la misma hora.
+  // Dos fisioterapeutas distintas pueden coincidir en la misma hora.
   const slotOcupado = (hora: string) => {
     const fisio = selectedCita?.fisioterapeuta || 'Liliana'
     return dayCitas.some(c =>
@@ -296,7 +297,7 @@ export default function AgendaPage() {
             <CalendarIcon className="text-rose-400" size={36} />
             Calendario
           </h2>
-          <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">Agenda Semanal {isLuisa ? 'Luisa' : 'Liliana'} · toca una cita para gestionarla</p>
+          <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em] italic">Agenda Semanal {fisioActiva} · toca una cita para gestionarla</p>
         </div>
 
         <div className="flex items-center gap-3 bg-white p-2 rounded-[24px] shadow-lg shadow-rose-100/20 border border-rose-50">
@@ -353,8 +354,8 @@ export default function AgendaPage() {
                       const laborales = horasLaborales(d.fecha)
                       const isWorkingHour = laborales.includes(hora)
 
-                      // Todas las citas de la franja: si Liliana y Luisa coinciden en la
-                      // misma hora, se muestran ambas apiladas en la celda.
+                      // Todas las citas de la franja: si dos fisioterapeutas coinciden en
+                      // la misma hora, se muestran apiladas en la celda.
                       const citasSlot = citas.filter(c =>
                         c.fecha === d.fecha &&
                         c.hora_inicio.split(':')[0] === hora.split(':')[0] &&
@@ -378,7 +379,7 @@ export default function AgendaPage() {
                                   <div className={`${multi ? 'text-[6px] sm:text-[9px]' : 'text-[7px] sm:text-[10px]'} font-black truncate tracking-tight leading-none ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</div>
                                   <div className={`${multi ? 'text-[5px] sm:text-[7px]' : 'text-[6px] sm:text-[8px]'} font-bold tracking-widest uppercase mt-0.5 truncate ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>
                                     {format12h(cita.hora_inicio)}{!multi && ` · ${cita.duracion_minutos}m`}
-                                    {cita.fisioterapeuta && !isLuisa && ` · ${cita.fisioterapeuta}`}
+                                    {cita.fisioterapeuta && esDuena(fisioActiva) && ` · ${cita.fisioterapeuta}`}
                                   </div>
                                 </button>
                               )
@@ -511,14 +512,14 @@ export default function AgendaPage() {
                   Reprogramar (fecha / hora)
                 </button>
 
-                {!isLuisa && (
+                {esDuena(fisioActiva) && (
                   <div className="p-4 rounded-2xl bg-rose-50/40 border border-rose-100">
                     <div className="flex items-center gap-2 mb-3">
                       <UserCog size={16} className="text-rose-400" />
                       <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Terapeuta</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {['Liliana', 'Luisa'].map(f => (
+                    <div className="grid grid-cols-3 gap-2">
+                      {FISIOTERAPEUTAS.map(f => (
                         <button
                           key={f}
                           onClick={() => handleAssignTherapist(selectedCita.id, f)}

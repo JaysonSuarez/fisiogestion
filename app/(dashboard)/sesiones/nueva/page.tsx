@@ -8,6 +8,8 @@ import { ClipboardPlus, ArrowLeft, User, Calendar, Package, DollarSign, Wallet, 
 import { addDays, isSunday, getDay } from 'date-fns'
 import NotificationModal from '@/components/ui/NotificationModal'
 import { validarCupon, reclamarCupon, aplicarDescuentoCupon, type ResultadoCupon } from '@/lib/cupones'
+import { getFisioDeEmail, esDuena } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 const formatCOP = (valor: number) => {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor)
@@ -33,8 +35,8 @@ export default function NuevaSesionPage({
   const [loading, setLoading] = useState(false)
   const [fetchingPacientes, setFetchingPacientes] = useState(true)
   const [pacientes, setPacientes] = useState<any[]>([])
-  const [isLuisa, setIsLuisa] = useState(false)
-  
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
+
   const [pacienteId, setPacienteId] = useState(resolvedParams.paciente ?? '')
   const [cantidadSesiones, setCantidadSesiones] = useState<number>(1)
   const [valorPorSesion, setValorPorSesion] = useState<number>(30000)
@@ -68,12 +70,12 @@ export default function NuevaSesionPage({
     async function loadPacientes() {
       try {
         const user = await getCachedUser()
-        const isLu = user?.email?.toLowerCase().includes('luisa')
-        setIsLuisa(!!isLu)
+        const fisio = getFisioDeEmail(user?.email)
+        setFisioActiva(fisio)
 
         let query = supabase.from('pacientes').select('id, nombre, fisioterapeuta').order('nombre')
-        if (isLu) {
-          query = query.eq('fisioterapeuta', 'Luisa')
+        if (!esDuena(fisio)) {
+          query = query.eq('fisioterapeuta', fisio)
         }
 
         const { data, error } = await query
@@ -169,11 +171,13 @@ export default function NuevaSesionPage({
       const patientFisio = selectedPatient?.fisioterapeuta || 'Liliana'
       
       const user = await getCachedUser()
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      const activeFisio = isLu ? 'Luisa' : patientFisio
+      const fisio = getFisioDeEmail(user?.email)
+      // Si quien crea el plan es una empleada, las citas son suyas; si es la dueña,
+      // se respeta la fisio asignada al paciente.
+      const activeFisio = esDuena(fisio) ? patientFisio : fisio
 
       let currentCitaDate = new Date(fechaInicioStr + 'T12:00:00')
-      let abonoRestante = hizoAbono && !isLu ? Number(montoAbono) : 0
+      let abonoRestante = hizoAbono && esDuena(fisio) ? Number(montoAbono) : 0
 
       // Si hay cupón aplicado, reclamarlo de forma atómica (un solo uso).
       let notaCupon = ''
@@ -198,9 +202,9 @@ export default function NuevaSesionPage({
         paciente_id: pacienteId,
         fecha: fechaInicioStr,
         valor: valorConDescuento,
-        monto_pagado: (hizoAbono && !isLu) ? abonoRestante : 0,
-        metodo_pago: (hizoAbono && !isLu) ? metodoPago : null,
-        estado_pago: (hizoAbono && !isLu && abonoRestante >= valorConDescuento) ? 'pagado' : 'pendiente',
+        monto_pagado: (hizoAbono && esDuena(fisio)) ? abonoRestante : 0,
+        metodo_pago: (hizoAbono && esDuena(fisio)) ? metodoPago : null,
+        estado_pago: (hizoAbono && esDuena(fisio) && abonoRestante >= valorConDescuento) ? 'pagado' : 'pendiente',
         nota_clinica: `[Plan de ${tipoPlan === 'valoracion' ? 'Valoración' : cantidadSesiones + ' sesiones'}] ${nota_clinica}${notaCupon}`,
         duracion_minutos: 60 * cantidadSesiones
       }]).select('id').single()
@@ -333,7 +337,7 @@ export default function NuevaSesionPage({
 
           <div className="pt-8 border-t border-rose-50 space-y-6">
             <div className="grid grid-cols-2 gap-6">
-              <div className={`form-group ${isLuisa ? 'col-span-2' : ''}`}>
+              <div className={`form-group ${!esDuena(fisioActiva) ? 'col-span-2' : ''}`}>
                 <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Sesiones</label>
                 <select 
                   className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-white font-black text-rose-600 shadow-sm appearance-none"
@@ -369,7 +373,7 @@ export default function NuevaSesionPage({
                 )}
               </div>
 
-              {!isLuisa && (
+              {esDuena(fisioActiva) && (
                 <div className="form-group">
                   <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Precio P/S</label>
                   <div className="relative">
@@ -386,7 +390,7 @@ export default function NuevaSesionPage({
               )}
             </div>
 
-            {!isLuisa && (
+            {esDuena(fisioActiva) && (
               <div className="bg-rose-600 rounded-[35px] p-8 flex flex-col items-center shadow-2xl shadow-rose-200 relative overflow-hidden group">
                  <div className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-125 transition-transform duration-700">
                     <Flower2 size={100} />
@@ -405,7 +409,7 @@ export default function NuevaSesionPage({
             )}
 
             {/* Cupón de descuento */}
-            {!isLuisa && (
+            {esDuena(fisioActiva) && (
               <div className="border-2 border-dashed border-rose-100 rounded-[28px] p-6 space-y-3">
                 <div className="flex items-center gap-2">
                   <Ticket size={14} className="text-rose-400" />
@@ -483,7 +487,7 @@ export default function NuevaSesionPage({
                 </div>
               </div>
             )}
-                 {!isLuisa && (
+                 {esDuena(fisioActiva) && (
             <div className="pt-8 border-t border-rose-50">
               <div className="bg-rose-50/50 p-8 rounded-[40px] border-4 border-white shadow-inner relative overflow-hidden group">
                  <div className="absolute -left-6 -bottom-6 text-rose-100/50 group-hover:scale-110 transition-transform">
