@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { supabase, getCachedUser } from '@/lib/supabase'
 import { UserPlus, ArrowLeft, User, Phone, Stethoscope, Activity, FileText, Loader2, CheckCircle } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
+import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 export default function NuevoPacientePage() {
   const router = useRouter()
@@ -19,15 +21,17 @@ export default function NuevoPacientePage() {
     message: ''
   })
 
-  const [isLuisa, setIsLuisa] = useState(false)
-  const [selectedFisio, setSelectedFisio] = useState('Liliana')
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
+  const [selectedFisio, setSelectedFisio] = useState<Fisioterapeuta>('Liliana')
+  // Solo aplica a empleadas: si ella trajo al paciente, sus sesiones pagan 30%.
+  const [traidoPorFisio, setTraidoPorFisio] = useState(false)
 
   useEffect(() => {
     getCachedUser().then((user) => {
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      setIsLuisa(!!isLu)
-      if (isLu) {
-        setSelectedFisio('Luisa')
+      const fisio = getFisioDeEmail(user?.email)
+      setFisioActiva(fisio)
+      if (!esDuena(fisio)) {
+        setSelectedFisio(fisio)
       }
     })
   }, [])
@@ -62,7 +66,8 @@ export default function NuevoPacientePage() {
           notas_iniciales,
           documento_identidad,
           sexo,
-          fisioterapeuta: selectedFisio
+          fisioterapeuta: selectedFisio,
+          traido_por_fisio: traidoPorFisio
         }])
 
       if (insertError) throw insertError
@@ -188,19 +193,39 @@ export default function NuevoPacientePage() {
             </div>
           </div>
 
-          {!isLuisa && (
-            <div className="form-group">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
-                Asignar Fisioterapeuta
-              </label>
-              <select 
-                value={selectedFisio}
-                onChange={e => setSelectedFisio(e.target.value)}
-                className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer"
-              >
-                <option value="Liliana">Liliana</option>
-                <option value="Luisa">Luisa</option>
-              </select>
+          {esDuena(fisioActiva) && (
+            <div className="form-group space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
+                  Asignar Fisioterapeuta
+                </label>
+                <select
+                  value={selectedFisio}
+                  onChange={e => {
+                    const nueva = e.target.value as Fisioterapeuta
+                    setSelectedFisio(nueva)
+                    // La dueña no cobra comisión: el 30% no aplica.
+                    if (esDuena(nueva)) setTraidoPorFisio(false)
+                  }}
+                  className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer"
+                >
+                  {FISIOTERAPEUTAS.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+
+              {!esDuena(selectedFisio) && (
+                <label className="flex items-center gap-4 px-6 py-4 rounded-[28px] border-2 border-rose-100 bg-rose-50/40 cursor-pointer hover:bg-rose-50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={traidoPorFisio}
+                    onChange={e => setTraidoPorFisio(e.target.checked)}
+                    className="w-5 h-5 rounded-md border-2 border-rose-200 text-rose-600 focus:ring-rose-200 cursor-pointer accent-rose-600"
+                  />
+                  <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">
+                    La trajo esta fisioterapeuta (paga 30%)
+                  </span>
+                </label>
+              )}
             </div>
           )}
 

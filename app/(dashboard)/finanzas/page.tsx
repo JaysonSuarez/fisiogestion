@@ -16,6 +16,8 @@ import {
   getMonthDateRange,
   getValorPorSesion,
   calcularDiezmo,
+  getTasaComision,
+  EMPLEADAS,
 } from '@/lib/utils'
 
 
@@ -29,7 +31,7 @@ function FinanzasContent() {
   const [sesiones, setSesiones] = useState<any[]>([])
   const [pacientesDeudores, setPacientesDeudores] = useState<any[]>([])
   const [pacientesPagados, setPacientesPagados] = useState<any[]>([])
-  const [citasLuisa, setCitasLuisa] = useState<any[]>([])
+  const [citasFisios, setCitasFisios] = useState<any[]>([])
   const [selectedPatient, setSelectedPatient] = useState<any>(null)
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr())
   const [showIngresos, setShowIngresos] = useState(false)
@@ -97,38 +99,39 @@ function FinanzasContent() {
 
       const deudoresRaw = pendientes?.filter(s => !(s as any).cortesia && (s.monto_pagado || 0) < s.valor) || []
 
-      // Citas que Luisa realizó (completadas) en el mes → comisión del 25%.
-      // La comisión sale SOLO de lo pagado (salvo cortesía): se reparte el recaudo
-      // del plan entre las sesiones de Luisa por orden cronológico.
-      const { data: citasLu } = await supabase
+      // Citas que las empleadas realizaron (completadas) en el mes → comisión del
+      // 25%, o del 30% si fue esa fisio quien trajo al paciente. La comisión sale
+      // SOLO de lo pagado (salvo cortesía): se reparte el recaudo del plan entre
+      // sus sesiones por orden cronológico.
+      const { data: citasEmp } = await supabase
         .from('citas')
-        .select('id, fecha, hora_inicio, pago_terapeuta_control, sesion_id, sesiones(valor, monto_pagado, duracion_minutos, cortesia, pacientes(nombre))')
-        .eq('fisioterapeuta', 'Luisa')
+        .select('id, fecha, hora_inicio, fisioterapeuta, pago_terapeuta_control, sesion_id, sesiones(valor, monto_pagado, duracion_minutos, cortesia, pacientes(nombre, fisioterapeuta, traido_por_fisio))')
+        .in('fisioterapeuta', EMPLEADAS)
         .eq('estado', 'completada')
         .gte('fecha', startDate)
         .lte('fecha', endDate)
         .order('fecha', { ascending: false })
 
-      const mesCitas = (citasLu || []) as any[]
-      const sesionIdsLuisa = Array.from(new Set(mesCitas.map(c => c.sesion_id).filter(Boolean)))
+      const mesCitas = (citasEmp || []) as any[]
+      const sesionIdsEmpleadas = Array.from(new Set(mesCitas.map(c => c.sesion_id).filter(Boolean)))
 
-      // Todas las citas completadas de Luisa de esos planes (incluye otros meses),
-      // para repartir el pago del plan en orden cronológico.
-      let todasLuisaPlan: any[] = []
-      if (sesionIdsLuisa.length > 0) {
-        const { data: allLu } = await supabase
+      // Todas las citas completadas de empleadas en esos planes (incluye otros
+      // meses), para repartir el pago del plan en orden cronológico.
+      let todasEmpleadasPlan: any[] = []
+      if (sesionIdsEmpleadas.length > 0) {
+        const { data: allEmp } = await supabase
           .from('citas')
-          .select('id, fecha, hora_inicio, sesion_id')
-          .eq('fisioterapeuta', 'Luisa')
+          .select('id, fecha, hora_inicio, fisioterapeuta, sesion_id')
+          .in('fisioterapeuta', EMPLEADAS)
           .eq('estado', 'completada')
-          .in('sesion_id', sesionIdsLuisa)
-        todasLuisaPlan = allLu || []
+          .in('sesion_id', sesionIdsEmpleadas)
+        todasEmpleadasPlan = allEmp || []
       }
 
       const planInfo: Record<string, any> = {}
       mesCitas.forEach(c => { if (c.sesion_id) planInfo[c.sesion_id] = c.sesiones })
 
-      const porPlan = todasLuisaPlan.reduce((acc: Record<string, any[]>, c) => {
+      const porPlan = todasEmpleadasPlan.reduce((acc: Record<string, any[]>, c) => {
         (acc[c.sesion_id] = acc[c.sesion_id] || []).push(c); return acc
       }, {})
 
@@ -144,7 +147,7 @@ function FinanzasContent() {
           const base = info.cortesia
             ? vps
             : Math.max(0, Math.min(vps, (info.monto_pagado || 0) - acumulado))
-          comisionPorCita[c.id] = Math.round(base * 0.25)
+          comisionPorCita[c.id] = Math.round(base * getTasaComision(c.fisioterapeuta, info.pacientes))
           acumulado += vps
         })
       })
@@ -153,12 +156,14 @@ function FinanzasContent() {
         id: c.id,
         fecha: c.fecha,
         nombre: c.sesiones?.pacientes?.nombre,
+        fisioterapeuta: c.fisioterapeuta,
+        tasa: getTasaComision(c.fisioterapeuta, c.sesiones?.pacientes),
         comision: comisionPorCita[c.id] ?? 0,
         pagado: c.pago_terapeuta_control === 'pagado',
         cortesia: !!c.sesiones?.cortesia,
       }))
 
-      setCitasLuisa(procesadas)
+      setCitasFisios(procesadas)
 
       const agrupados: Record<string, any> = {}
       deudoresRaw.forEach(s => {
@@ -202,14 +207,19 @@ function FinanzasContent() {
     }
   }, [selectedMonth])
 
-  // ─── Comisión de Luisa (mes) — ya calculada en loadData, capada por lo pagado ──
-  const citasLuisaProcesadas = citasLuisa as any[]
-  const totalComisionLuisa = citasLuisaProcesadas.reduce((a, c) => a + c.comision, 0)
-  const comisionPendienteLuisa = citasLuisaProcesadas.filter(c => !c.pagado).reduce((a, c) => a + c.comision, 0)
+  // ─── Comisiones del mes — ya calculadas en loadData, capadas por lo pagado ────
+  const citasFisiosProcesadas = citasFisios as any[]
+  const totalComisionFisios = citasFisiosProcesadas.reduce((a, c) => a + c.comision, 0)
+  const comisionPendienteFisios = citasFisiosProcesadas.filter(c => !c.pagado).reduce((a, c) => a + c.comision, 0)
+  // Desglose por fisioterapeuta, para saber a quién se le debe qué.
+  const comisionPorFisio = citasFisiosProcesadas.reduce((acc: Record<string, number>, c) => {
+    if (!c.pagado) acc[c.fisioterapeuta] = (acc[c.fisioterapeuta] || 0) + c.comision
+    return acc
+  }, {})
 
   // ─── Flujo de dinero del mes (los planes de cortesía no son ingreso real) ─────
   const recaudadoBruto = sesiones.filter((s: any) => !s.cortesia).reduce((a, s) => a + (s.monto_pagado || 0), 0)
-  const comisionParaGanancia = citasLuisaProcesadas.filter(c => !c.cortesia).reduce((a, c) => a + c.comision, 0)
+  const comisionParaGanancia = citasFisiosProcesadas.filter(c => !c.cortesia).reduce((a, c) => a + c.comision, 0)
   const gananciaLiliana = Math.max(0, recaudadoBruto - comisionParaGanancia)
   const diezmoEstimado = calcularDiezmo(gananciaLiliana)
   const carteraPorCobrar = pacientesDeudores.reduce((a, p) => a + p.deudaTotal, 0)
@@ -272,7 +282,7 @@ function FinanzasContent() {
   }
 
   async function handlePagarLuisa() {
-    const idsPendientes = citasLuisaProcesadas.filter(c => !c.pagado).map(c => c.id)
+    const idsPendientes = citasFisiosProcesadas.filter(c => !c.pagado).map(c => c.id)
     if (idsPendientes.length === 0) return
 
     setSaving(true)
@@ -331,7 +341,7 @@ function FinanzasContent() {
 
   // Revierte todas las comisiones pagadas del mes a "pendiente".
   async function handleRevertirLuisa() {
-    const idsPagados = citasLuisaProcesadas.filter(c => c.pagado).map(c => c.id)
+    const idsPagados = citasFisiosProcesadas.filter(c => c.pagado).map(c => c.id)
     if (idsPagados.length === 0) return
 
     setSaving(true)
@@ -451,7 +461,7 @@ function FinanzasContent() {
               <span className="text-lg font-black">{formatCOP(recaudadoBruto)}</span>
             </div>
             <div className="flex items-center justify-between text-amber-300">
-              <span className="text-xs font-bold uppercase tracking-widest">− Comisión de Luisa</span>
+              <span className="text-xs font-bold uppercase tracking-widest">− Comisiones de fisioterapeutas</span>
               <span className="text-lg font-black">−{formatCOP(comisionParaGanancia)}</span>
             </div>
             <div className="h-px bg-white/10" />
@@ -544,18 +554,18 @@ function FinanzasContent() {
         <div className="flex items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-amber-50 text-amber-500 rounded-xl"><Activity size={20} /></div>
-            <h3 className="text-rose-950 font-black uppercase text-sm tracking-widest">Comisiones de Luisa · {formatMes(selectedMonth)}</h3>
+            <h3 className="text-rose-950 font-black uppercase text-sm tracking-widest">Comisiones de fisioterapeutas · {formatMes(selectedMonth)}</h3>
           </div>
-          {comisionPendienteLuisa > 0 ? (
+          {comisionPendienteFisios > 0 ? (
             <button
               onClick={handlePagarLuisa}
               disabled={saving}
               className="px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 font-black text-[10px] uppercase tracking-[0.2em] rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-              Pagar {formatCOP(comisionPendienteLuisa)}
+              Pagar {formatCOP(comisionPendienteFisios)}
             </button>
-          ) : citasLuisaProcesadas.some(c => c.pagado) ? (
+          ) : citasFisiosProcesadas.some(c => c.pagado) ? (
             <button
               onClick={handleRevertirLuisa}
               disabled={saving}
@@ -570,30 +580,37 @@ function FinanzasContent() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
           <div className="card p-5 border-none shadow-lg shadow-rose-100/20">
             <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-1">Sesiones (mes)</span>
-            <div className="text-xl font-black text-rose-950">{citasLuisa.length}</div>
+            <div className="text-xl font-black text-rose-950">{citasFisios.length}</div>
           </div>
           <div className="card p-5 border-none shadow-lg shadow-amber-100/20 bg-amber-50/50">
             <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest block mb-1">Comisión total</span>
-            <div className="text-xl font-black text-amber-600">{formatCOP(totalComisionLuisa)}</div>
+            <div className="text-xl font-black text-amber-600">{formatCOP(totalComisionFisios)}</div>
           </div>
           <div className="card p-5 border-none shadow-lg shadow-rose-100/20 col-span-2 sm:col-span-1">
             <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-1">Por pagar</span>
-            <div className="text-xl font-black text-rose-600">{formatCOP(comisionPendienteLuisa)}</div>
+            <div className="text-xl font-black text-rose-600">{formatCOP(comisionPendienteFisios)}</div>
+            {Object.keys(comisionPorFisio).length > 1 && (
+              <div className="text-[9px] font-bold text-rose-300 uppercase tracking-widest mt-1">
+                {Object.entries(comisionPorFisio).map(([f, m]) => `${f}: ${formatCOP(m as number)}`).join(' · ')}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="card p-6 shadow-xl shadow-rose-100/20 border-2 border-rose-50">
            <div className="space-y-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-2">
-              {citasLuisaProcesadas.map((c) => (
+              {citasFisiosProcesadas.map((c) => (
                 <div key={c.id} className="p-4 bg-rose-50/30 rounded-[20px] border border-rose-100 flex items-center justify-between group hover:bg-rose-50 transition-colors">
                    <div>
                       <div className="text-xs font-black text-rose-950 uppercase tracking-tight">{c.nombre}</div>
-                      <div className="text-[10px] font-bold text-rose-400 mt-1">{c.fecha}</div>
+                      <div className="text-[10px] font-bold text-rose-400 mt-1">{c.fecha} · {c.fisioterapeuta}</div>
                    </div>
                    <div className="flex items-center gap-4">
                       <div className="text-right">
                          <div className="text-xs font-black text-amber-600">{formatCOP(c.comision)}</div>
-                         <div className="text-[8px] font-bold text-rose-300 uppercase tracking-widest">25% comisión</div>
+                         <div className="text-[8px] font-bold text-rose-300 uppercase tracking-widest">
+                           {Math.round(c.tasa * 100)}% comisión{c.tasa > 0.25 ? ' · trajo al paciente' : ''}
+                         </div>
                       </div>
                       <button
                         onClick={() => handleToggleComisionLuisa(c.id, c.pagado)}
@@ -606,10 +623,10 @@ function FinanzasContent() {
                    </div>
                 </div>
               ))}
-              {citasLuisaProcesadas.length === 0 && (
+              {citasFisiosProcesadas.length === 0 && (
                 <div className="py-12 text-center opacity-50">
                   <Calendar className="mx-auto mb-3 text-rose-300" size={32} />
-                  <p className="text-rose-400 font-black text-[10px] uppercase tracking-[0.2em]">Luisa no realizó sesiones este mes.</p>
+                  <p className="text-rose-400 font-black text-[10px] uppercase tracking-[0.2em]">Ninguna fisioterapeuta realizó sesiones este mes.</p>
                 </div>
               )}
            </div>

@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getFisioDeEmail, esDuena } from '@/lib/utils'
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -76,7 +77,8 @@ export async function proxy(request: NextRequest) {
     }
   } else {
     // === ADMIN DASHBOARD ROUTING ===
-    const isLuisa = user?.email?.toLowerCase().includes('luisa')
+    // Solo la dueña entra a las rutas de dinero; cualquier otra fisioterapeuta no.
+    const esEmpleada = !!user && !esDuena(getFisioDeEmail(user.email))
     const protectedAdminRoutes = ['/finanzas', '/diezmo', '/ajustes']
     const isProtectedAdminRoute = protectedAdminRoutes.some(route => path.startsWith(route))
 
@@ -97,8 +99,8 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Redirect to admin dashboard home if user is Luisa and trying to access protected admin routes
-    if (user && isLuisa && isProtectedAdminRoute) {
+    // Redirect to admin dashboard home if an employee tries to access protected admin routes
+    if (user && esEmpleada && isProtectedAdminRoute) {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)

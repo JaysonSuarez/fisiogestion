@@ -8,6 +8,8 @@ import {
   LayoutDashboard, Users, CalendarDays, Wallet,
   ClipboardList, Heart, Menu, Sparkles, Flower2, Flower, Sprout, Moon, Sun, Stars, Settings, FileText, Ticket
 } from 'lucide-react'
+import { getFisioDeEmail, esDuena } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 const navItems = [
   { href: '/',          label: 'Inicio',      icon: LayoutDashboard },
@@ -25,20 +27,21 @@ export default function Sidebar() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isVisible, setIsVisible] = useState(true)
   const lastScrollY = useRef(0)
-  const [isLuisa, setIsLuisa] = useState(false)
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
   const [userProfile, setUserProfile] = useState({ name: 'Ft. Liliana G.', initial: 'LG' })
 
   useEffect(() => {
     getCachedUser().then((user) => {
-      if (user?.email?.toLowerCase().includes('luisa')) {
-        setIsLuisa(true)
-        setUserProfile({ name: 'Ft. Luisa', initial: 'LU' })
+      const fisio = getFisioDeEmail(user?.email)
+      setFisioActiva(fisio)
+      if (!esDuena(fisio)) {
+        setUserProfile({ name: `Ft. ${fisio}`, initial: fisio.slice(0, 2).toUpperCase() })
       }
     })
   }, [])
 
   const filteredNavItems = navItems.filter(item => {
-    if (isLuisa && (item.href === '/finanzas' || item.href === '/diezmo' || item.href === '/ajustes')) {
+    if (!esDuena(fisioActiva) && (item.href === '/finanzas' || item.href === '/diezmo' || item.href === '/ajustes')) {
       return false
     }
     return true

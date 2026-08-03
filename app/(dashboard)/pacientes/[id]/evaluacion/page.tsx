@@ -11,6 +11,8 @@ import {
   ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react'
 import { AITextarea } from '@/components/ui/AITextarea'
+import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 // Collapsible section component
 function Section({
@@ -99,8 +101,8 @@ export default function EvaluacionPage() {
   const params = useParams()
   const pacienteId = params.id as string
 
-  const [isLuisa, setIsLuisa] = useState(false)
-  const [selectedFisio, setSelectedFisio] = useState('Liliana')
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
+  const [selectedFisio, setSelectedFisio] = useState<Fisioterapeuta>('Liliana')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -206,8 +208,8 @@ export default function EvaluacionPage() {
   async function loadData() {
     try {
       const user = await getCachedUser()
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      setIsLuisa(!!isLu)
+      const fisio = getFisioDeEmail(user?.email)
+      setFisioActiva(fisio)
 
       const [pRes, evalRes] = await Promise.all([
         supabase.from('pacientes').select('*').eq('id', pacienteId).single(),
@@ -227,7 +229,7 @@ export default function EvaluacionPage() {
 
       if (eData) {
         setEvaluacion(eData)
-        setSelectedFisio(eData.fisioterapeuta || (isLu ? 'Luisa' : 'Liliana'))
+        setSelectedFisio(eData.fisioterapeuta || fisio)
         // Populate form
         Object.keys(newForm).forEach(key => {
           if (eData[key] !== undefined && eData[key] !== null) {
@@ -239,7 +241,7 @@ export default function EvaluacionPage() {
           }
         })
       } else {
-        setSelectedFisio(isLu ? 'Luisa' : 'Liliana')
+        setSelectedFisio(fisio)
       }
       setForm(newForm)
 
@@ -385,16 +387,15 @@ export default function EvaluacionPage() {
             <FormField label="Fecha de valoración" name="fecha_valoracion" value={form.fecha_valoracion} onChange={v => updateField('fecha_valoracion', v)} type="date" />
           </div>
           <FormField label="Ocupación" name="ocupacion" value={form.ocupacion} onChange={v => updateField('ocupacion', v)} placeholder="Ej: Oficinista, deportista, ama de casa…" />
-          {!isLuisa && (
+          {esDuena(fisioActiva) && (
             <div className="mt-4 max-w-xs">
               <label className="text-[10px] font-black text-rose-300 uppercase tracking-widest mb-2 block font-bold">Fisioterapeuta Asignada</label>
               <select
                 value={selectedFisio}
-                onChange={e => setSelectedFisio(e.target.value)}
+                onChange={e => setSelectedFisio(e.target.value as Fisioterapeuta)}
                 className="w-full bg-rose-50/50 border border-rose-100 text-rose-950 font-black rounded-[20px] px-4 py-3 shadow-sm uppercase tracking-widest text-xs outline-none focus:ring-2 focus:ring-rose-200 cursor-pointer"
               >
-                <option value="Liliana">Liliana</option>
-                <option value="Luisa">Luisa</option>
+                {FISIOTERAPEUTAS.map(f => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
           )}

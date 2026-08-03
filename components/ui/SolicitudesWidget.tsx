@@ -7,7 +7,8 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import NotificationModal from '@/components/ui/NotificationModal'
 
-import { formatCOP, format12h } from '@/lib/utils'
+import { formatCOP, format12h, getFisioDeEmail, esDuena } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 export default function SolicitudesWidget() {
   const [solicitudes, setSolicitudes] = useState<any[]>([])
@@ -26,13 +27,12 @@ export default function SolicitudesWidget() {
     setSolicitudes(data || [])
   }
 
-  const [isLuisa, setIsLuisa] = useState(false)
+  const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
 
   useEffect(() => {
     loadSolicitudes()
     getCachedUser().then((user) => {
-      const isLu = user?.email?.toLowerCase().includes('luisa')
-      setIsLuisa(!!isLu)
+      setFisioActiva(getFisioDeEmail(user?.email))
     })
     const channel = supabase
       .channel('solicitudes-realtime')
@@ -56,7 +56,7 @@ export default function SolicitudesWidget() {
           notas_iniciales: `Paciente agendó en línea. Edad: ${solicitud.edad} años.`,
           total_sesiones: solicitud.num_sesiones,
           valor_sesion: solicitud.precio_sesion,
-          fisioterapeuta: isLuisa ? 'Luisa' : 'Liliana'
+          fisioterapeuta: fisioActiva
         }])
         .select()
         .single()
@@ -93,7 +93,7 @@ export default function SolicitudesWidget() {
         hora_inicio: slot.hora,
         duracion_minutos: 60,
         estado: 'confirmada',
-        fisioterapeuta: isLuisa ? 'Luisa' : 'Liliana',
+        fisioterapeuta: fisioActiva,
         notas: `Sesión agendada en línea. Diagnóstico: ${solicitud.diagnostico}`,
       }))
 
@@ -173,7 +173,7 @@ export default function SolicitudesWidget() {
                   <div>
                     <div className="font-black text-rose-950 text-base tracking-tight">{s.nombre} {s.apellido}</div>
                     <div className="text-[9px] font-black text-rose-400 uppercase tracking-widest mt-0.5">
-                      {isLuisa ? `${s.num_sesiones} sesiones` : `${s.num_sesiones} sesiones · ${formatCOP(s.precio_total)}`}
+                      {esDuena(fisioActiva) ? `${s.num_sesiones} sesiones · ${formatCOP(s.precio_total)}` : `${s.num_sesiones} sesiones`}
                     </div>
                   </div>
                 </div>
