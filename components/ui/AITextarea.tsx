@@ -26,8 +26,13 @@ export function AITextarea({
   const [showSuccess, setShowSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Blindaje: el valor siempre debe tratarse como string. Si por cualquier
+  // motivo llega un array/objeto/número (p. ej. desde la IA), evitamos que
+  // `.trim()` lance un TypeError y tumbe toda la página.
+  const safeValue = typeof value === 'string' ? value : value == null ? '' : String(value)
+
   const handleRefine = async () => {
-    if (!value.trim()) return
+    if (!safeValue.trim()) return
 
     setIsGenerating(true)
     setError(null)
@@ -87,14 +92,14 @@ export function AITextarea({
       <div className="relative group">
         <textarea
           name={name}
-          value={value}
+          value={safeValue}
           onChange={e => onChange(e.target.value)}
           className="w-full bg-rose-50/50 border border-rose-100 rounded-2xl px-4 py-3 text-sm font-bold text-rose-950 outline-none focus:border-rose-300 transition-all min-h-[90px] resize-none pr-12"
           placeholder={placeholder}
           required={required}
         />
         
-        {value.trim().length > 3 && (
+        {safeValue.trim().length > 3 && (
           <button
             type="button"
             onClick={handleRefine}

@@ -14,6 +14,17 @@ import { AITextarea } from '@/components/ui/AITextarea'
 import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
 
+// Convierte cualquier valor devuelto por la IA en texto seguro para un campo de
+// texto. La IA a veces devuelve listas u objetos (p. ej. ejercicios_casa como
+// array), lo que provocaba un TypeError al renderizar los campos multilínea.
+function toText(value: any): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map(toText).filter(Boolean).join('\n')
+  if (typeof value === 'object') return Object.values(value).map(toText).filter(Boolean).join('\n')
+  return String(value)
+}
+
 // Collapsible section component
 function Section({
   number, title, icon: Icon, children, defaultOpen = false
@@ -185,12 +196,12 @@ export default function EvaluacionPage() {
       
       setForm(prev => ({
         ...prev,
-        objetivos_corto_plazo: data.objetivos_corto_plazo || prev.objetivos_corto_plazo,
-        objetivos_mediano_plazo: data.objetivos_mediano_plazo || prev.objetivos_mediano_plazo,
-        objetivos_largo_plazo: data.objetivos_largo_plazo || prev.objetivos_largo_plazo,
-        tipo_intervencion: data.tipo_intervencion || prev.tipo_intervencion,
-        frecuencia_tratamiento: data.frecuencia_tratamiento || prev.frecuencia_tratamiento,
-        ejercicios_casa: data.ejercicios_casa || prev.ejercicios_casa
+        objetivos_corto_plazo: toText(data.objetivos_corto_plazo) || prev.objetivos_corto_plazo,
+        objetivos_mediano_plazo: toText(data.objetivos_mediano_plazo) || prev.objetivos_mediano_plazo,
+        objetivos_largo_plazo: toText(data.objetivos_largo_plazo) || prev.objetivos_largo_plazo,
+        tipo_intervencion: toText(data.tipo_intervencion) || prev.tipo_intervencion,
+        frecuencia_tratamiento: toText(data.frecuencia_tratamiento) || prev.frecuencia_tratamiento,
+        ejercicios_casa: toText(data.ejercicios_casa) || prev.ejercicios_casa
       }))
 
     } catch (err: any) {
