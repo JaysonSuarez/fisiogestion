@@ -20,6 +20,7 @@ interface EvaluacionData {
   factores_empeoran?: string
   factores_alivian?: string
   antecedentes_medicos?: string
+  inspeccion_palpacion?: string
 
   // Postural
   postura_estatica?: string
@@ -267,6 +268,7 @@ export function generateEvaluacionPDF(
   drawField('Factores que empeoran', evaluacion.factores_empeoran)
   drawField('Factores que alivian', evaluacion.factores_alivian)
   drawField('Antecedentes médicos', evaluacion.antecedentes_medicos)
+  drawField('Inspección y palpación', evaluacion.inspeccion_palpacion)
   drawDivider()
 
   // ═══════════════════════════════════════════════════════════

@@ -123,6 +123,7 @@ export default function EvaluacionPage() {
     factores_empeoran: '',
     factores_alivian: '',
     antecedentes_medicos: '',
+    inspeccion_palpacion: '',
     postura_estatica: '',
     alteraciones_visibles: '',
     analisis_marcha: '',
@@ -452,6 +453,7 @@ export default function EvaluacionPage() {
           <FormField label="Factores que empeoran" name="factores_empeoran" value={form.factores_empeoran} onChange={v => updateField('factores_empeoran', v)} multiline placeholder="Ej: estar sentado mucho tiempo, cargar peso…" />
           <FormField label="Factores que alivian" name="factores_alivian" value={form.factores_alivian} onChange={v => updateField('factores_alivian', v)} multiline placeholder="Ej: reposo, calor local, cambio de posición…" />
           <FormField label="Antecedentes médicos" name="antecedentes_medicos" value={form.antecedentes_medicos} onChange={v => updateField('antecedentes_medicos', v)} multiline placeholder="Cirugías, enfermedades, medicamentos…" />
+          <FormField label="Inspección y palpación" name="inspeccion_palpacion" value={form.inspeccion_palpacion} onChange={v => updateField('inspeccion_palpacion', v)} multiline placeholder="Inspección visual (edema, coloración, deformidades…) y hallazgos a la palpación (dolor, temperatura, tono, puntos gatillo…)" />
         </Section>
 
         {/* 4. Mapa del Dolor Analógico */}
