@@ -11,8 +11,32 @@ import {
   ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react'
 import { AITextarea } from '@/components/ui/AITextarea'
-import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
+import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS, PERFILES_FISIO } from '@/lib/utils'
+import type { PerfilFisio } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
+
+// Carga la firma manuscrita de una fisio (PNG transparente en /public) y la
+// devuelve como dataURL con sus dimensiones naturales para preservar la
+// proporción al incrustarla en el PDF.
+async function loadFirma(
+  perfil: PerfilFisio
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  if (!perfil.firma) return null
+  try {
+    const img = new Image()
+    img.src = encodeURI(perfil.firma)
+    await img.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0)
+    return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height }
+  } catch {
+    return null
+  }
+}
 
 // Convierte cualquier valor devuelto por la IA en texto seguro para un campo de
 // texto. La IA a veces devuelve listas u objetos (p. ej. ejercicios_casa como
@@ -316,8 +340,10 @@ export default function EvaluacionPage() {
     }
   }
 
-  function handleDownloadPDF() {
+  async function handleDownloadPDF() {
     if (!patient || !profesional) return
+    const perfil = PERFILES_FISIO[selectedFisio]
+    const firma = await loadFirma(perfil)
     generateEvaluacionPDF(
       {
         nombre: patient.nombre,
@@ -326,7 +352,13 @@ export default function EvaluacionPage() {
         ...form,
         escala_eva: form.escala_eva ? parseInt(form.escala_eva) : undefined,
       },
-      profesional
+      profesional,
+      {
+        nombre_completo: perfil.nombre_completo,
+        especialidad: perfil.especialidad,
+        registro_profesional: perfil.registro_profesional,
+        firma,
+      }
     )
   }
 

@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import { ENTIDAD } from './utils'
 
 interface EvaluacionData {
   // Paciente
@@ -72,6 +73,18 @@ interface ProfesionalData {
   direccion: string
 }
 
+// Fisio que realmente hizo la evaluación (puede ser distinta de la dueña). Su
+// nombre, registro y firma aparecen en el encabezado y en el bloque de firma,
+// mientras que la entidad sigue siendo "Liliana's Therapy".
+interface FisioEvaluadora {
+  nombre_completo: string
+  especialidad: string
+  registro_profesional: string
+  // Firma ya convertida a dataURL, con sus dimensiones naturales en px para
+  // preservar la proporción al incrustarla. `null` si aún no hay firma.
+  firma?: { dataUrl: string; width: number; height: number } | null
+}
+
 // Colors
 const ROSE_950 = [40, 5, 15]
 const ROSE_600 = [225, 29, 72]
@@ -83,7 +96,8 @@ const WHITE = [255, 255, 255]
 
 export function generateEvaluacionPDF(
   evaluacion: EvaluacionData,
-  profesional: ProfesionalData
+  profesional: ProfesionalData,
+  fisioEvaluadora: FisioEvaluadora
 ) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -96,16 +110,9 @@ export function generateEvaluacionPDF(
     if (y + neededHeight > pageHeight - 30) {
       doc.addPage()
       y = 20
-      drawPageFooter()
+      // El pie se estampa al final en todas las páginas (con "de N"). No lo
+      // dibujamos aquí para no duplicarlo/solaparlo.
     }
-  }
-
-  function drawPageFooter() {
-    const pageCount = doc.getNumberOfPages()
-    doc.setFontSize(7)
-    doc.setTextColor(...SLATE_400 as [number, number, number])
-    doc.text(`Página ${pageCount}`, pageWidth / 2, pageHeight - 10, { align: 'center' })
-    doc.text('FisioGestión — Documento generado digitalmente', pageWidth / 2, pageHeight - 6, { align: 'center' })
   }
 
   function drawSectionHeader(title: string, number: number) {
@@ -140,10 +147,18 @@ export function generateEvaluacionPDF(
   function drawFieldRow(fields: { label: string; value?: string | number | null }[]) {
     const filledFields = fields.filter(f => f.value !== undefined && f.value !== null && f.value !== '')
     if (filledFields.length === 0) return
-    checkPageBreak(12)
 
     const colWidth = contentWidth / filledFields.length
-    filledFields.forEach((field, i) => {
+    // Envolvemos cada valor a su columna para que el texto largo salte de renglón
+    // en lugar de salirse del margen, y crecemos la fila según la columna más alta.
+    const wrapped = filledFields.map(field => ({
+      label: field.label,
+      lines: doc.splitTextToSize(String(field.value), colWidth - 4) as string[],
+    }))
+    const maxLines = wrapped.reduce((m, f) => Math.max(m, f.lines.length), 1)
+    checkPageBreak(6 + maxLines * 4.5)
+
+    wrapped.forEach((field, i) => {
       const x = margin + i * colWidth + 2
       doc.setFontSize(7.5)
       doc.setTextColor(...SLATE_400 as [number, number, number])
@@ -153,9 +168,9 @@ export function generateEvaluacionPDF(
       doc.setFontSize(9)
       doc.setTextColor(...SLATE_700 as [number, number, number])
       doc.setFont('helvetica', 'normal')
-      doc.text(String(field.value), x, y + 4.5)
+      doc.text(field.lines, x, y + 4.5)
     })
-    y += 12
+    y += 4.5 + maxLines * 4.5 + 3
   }
 
   function drawDivider() {
@@ -201,23 +216,30 @@ export function generateEvaluacionPDF(
   // HEADER
   // ═══════════════════════════════════════════════════════════
   doc.setFillColor(...ROSE_950 as [number, number, number])
-  doc.rect(0, 0, pageWidth, 45, 'F')
+  doc.rect(0, 0, pageWidth, 52, 'F')
+
+  // Marca de la entidad (eyebrow)
+  doc.setTextColor(255, 200, 210)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.text(ENTIDAD.toUpperCase(), margin, 12)
 
   // Title
   doc.setTextColor(...WHITE as [number, number, number])
-  doc.setFontSize(22)
+  doc.setFontSize(20)
   doc.setFont('helvetica', 'bold')
-  doc.text('Evaluación Fisioterapéutica', margin, 20)
+  doc.text('Evaluación Fisioterapéutica', margin, 23)
 
+  // Fisio que realizó la evaluación
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(255, 200, 210)
-  doc.text(`${profesional.nombre_completo} — ${profesional.especialidad}`, margin, 28)
-  if (profesional.registro_profesional) {
-    doc.text(`Registro: ${profesional.registro_profesional}`, margin, 34)
+  doc.text(`${fisioEvaluadora.nombre_completo} — ${fisioEvaluadora.especialidad}`, margin, 32)
+  if (fisioEvaluadora.registro_profesional) {
+    doc.text(`Registro: ${fisioEvaluadora.registro_profesional}`, margin, 38)
   }
   if (profesional.direccion) {
-    doc.text(profesional.direccion, margin, 40)
+    doc.text(profesional.direccion, margin, 44)
   }
 
   // Date on right
@@ -227,9 +249,9 @@ export function generateEvaluacionPDF(
   const dateStr = new Date(evaluacion.fecha_valoracion + 'T12:00').toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   })
-  doc.text(dateStr, pageWidth - margin, 20, { align: 'right' })
+  doc.text(dateStr, pageWidth - margin, 12, { align: 'right' })
 
-  y = 55
+  y = 62
 
   // ═══════════════════════════════════════════════════════════
   // 1. DATOS DEL PACIENTE
@@ -258,10 +280,9 @@ export function generateEvaluacionPDF(
   // 3. ANAMNESIS (HISTORIA CLÍNICA)
   // ═══════════════════════════════════════════════════════════
   drawSectionHeader('Anamnesis (Historia Clínica)', 3)
-  drawFieldRow([
-    { label: 'Inicio del problema', value: evaluacion.inicio_problema },
-    { label: 'Mecanismo de lesión', value: evaluacion.mecanismo_lesion },
-  ])
+  drawField('Inicio del problema', evaluacion.inicio_problema)
+  // Texto libre y potencialmente largo: ancho completo para que salte de renglón.
+  drawField('Mecanismo de lesión', evaluacion.mecanismo_lesion)
   if (evaluacion.escala_eva !== undefined && evaluacion.escala_eva !== null) {
     drawEVAScale(evaluacion.escala_eva)
   }
@@ -349,39 +370,67 @@ export function generateEvaluacionPDF(
   // ═══════════════════════════════════════════════════════════
   // 13. FIRMA DEL PROFESIONAL
   // ═══════════════════════════════════════════════════════════
-  checkPageBreak(40)
+  checkPageBreak(50)
   y += 10
   drawSectionHeader('Firma y Datos del Profesional', 13)
   y += 5
 
+  const sigX = margin + 10
+  const sigWidth = 70
+  const sigLineY = y + 20
+
+  // Firma manuscrita (si existe), incrustada justo encima de la línea,
+  // preservando su proporción dentro de un recuadro de sigWidth × 16 mm.
+  if (fisioEvaluadora.firma) {
+    const { dataUrl, width: pw, height: ph } = fisioEvaluadora.firma
+    const boxW = sigWidth
+    const boxH = 16
+    const ratio = pw > 0 && ph > 0 ? pw / ph : 3
+    let drawW = boxW
+    let drawH = drawW / ratio
+    if (drawH > boxH) {
+      drawH = boxH
+      drawW = drawH * ratio
+    }
+    const fmt = dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+    doc.addImage(dataUrl, fmt, sigX, sigLineY - drawH - 1, drawW, drawH)
+  }
+
   // Signature line
   doc.setDrawColor(...SLATE_700 as [number, number, number])
   doc.setLineWidth(0.5)
-  const sigX = margin + 10
-  const sigWidth = 70
-  doc.line(sigX, y + 12, sigX + sigWidth, y + 12)
+  doc.line(sigX, sigLineY, sigX + sigWidth, sigLineY)
 
   doc.setFontSize(9)
   doc.setTextColor(...SLATE_700 as [number, number, number])
   doc.setFont('helvetica', 'bold')
-  doc.text(profesional.nombre_completo, sigX, y + 18)
+  doc.text(fisioEvaluadora.nombre_completo, sigX, sigLineY + 6)
 
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...SLATE_400 as [number, number, number])
-  doc.text(profesional.especialidad, sigX, y + 23)
-  if (profesional.registro_profesional) {
-    doc.text(`Reg. ${profesional.registro_profesional}`, sigX, y + 28)
+  doc.text(fisioEvaluadora.especialidad, sigX, sigLineY + 11)
+  if (fisioEvaluadora.registro_profesional) {
+    doc.text(`Reg. ${fisioEvaluadora.registro_profesional}`, sigX, sigLineY + 16)
   }
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...ROSE_600 as [number, number, number])
+  doc.text(ENTIDAD, sigX, sigLineY + 21)
 
   // Add page footers to all pages
   const totalPages = doc.getNumberOfPages()
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i)
+    // Línea divisoria fina sobre el pie
+    doc.setDrawColor(...ROSE_100 as [number, number, number])
+    doc.setLineWidth(0.3)
+    doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15)
+
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(7)
     doc.setTextColor(...SLATE_400 as [number, number, number])
-    doc.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' })
-    doc.text('FisioGestión — Documento generado digitalmente', pageWidth / 2, pageHeight - 6, { align: 'center' })
+    doc.text(`${ENTIDAD} · Documento generado digitalmente`, pageWidth / 2, pageHeight - 10, { align: 'center' })
+    doc.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pageHeight - 5, { align: 'center' })
   }
 
   // Save

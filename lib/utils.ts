@@ -74,6 +74,42 @@ export const getMonthDateRange = (yyyyMM: string) => {
 export const FISIOTERAPEUTAS: Fisioterapeuta[] = ['Liliana', 'Luisa', 'Jeniffer']
 // Liliana es la dueña: lo que ella atiende es ganancia, no comisión.
 export const DUENA: Fisioterapeuta = 'Liliana'
+
+// La marca/entidad bajo la que se emiten todos los documentos, sin importar qué
+// fisio haga la evaluación (Luisa y Jeniffer trabajan desde la entidad de Liliana).
+export const ENTIDAD = "Liliana's Therapy"
+
+// Identidad profesional de cada fisio para el documento de evaluación (encabezado
+// y firma). Se guarda fija en código porque son solo tres y cambian rara vez.
+// `firma` apunta a un PNG en /public con fondo transparente y tinta oscura, ya
+// procesado por scripts/procesar-firmas.js (recorte + transparencia).
+export interface PerfilFisio {
+  nombre_completo: string
+  especialidad: string
+  registro_profesional: string
+  firma: string | null
+}
+
+export const PERFILES_FISIO: Record<Fisioterapeuta, PerfilFisio> = {
+  Liliana: {
+    nombre_completo: 'Liliana González Morales',
+    especialidad: 'Fisioterapia',
+    registro_profesional: '28681',
+    firma: '/firma-liliana.png',
+  },
+  Luisa: {
+    nombre_completo: 'Luisa Jiménez',
+    especialidad: 'Fisioterapia',
+    registro_profesional: '32167',
+    firma: '/firma-luisa.png',
+  },
+  Jeniffer: {
+    nombre_completo: 'Jeniffer Racedo',
+    especialidad: 'Fisioterapia',
+    registro_profesional: '25166',
+    firma: '/firma-jeniffer.png',
+  },
+}
 export const EMPLEADAS = FISIOTERAPEUTAS.filter(f => f !== DUENA)
 export const COMISION_BASE = 0.25
 export const COMISION_REFERIDO = 0.30
