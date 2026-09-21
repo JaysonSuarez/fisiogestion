@@ -108,9 +108,8 @@ export default function DashboardPage() {
       }
 
       let citasHoyQuery = supabase.from('citas').select('*, pacientes(nombre, telefono)').eq('fecha', todayStr).neq('estado', 'cancelada')
-      // `fisioterapeuta, traido_por_fisio` del paciente son necesarios para saber si
-      // la comisión es del 25% o del 30%; sin ellos el diezmo estimado aquí no
-      // coincidiría con el de la pantalla de Diezmo.
+      // Incluimos los datos relacionados necesarios para que el resumen use el
+      // mismo cálculo de comisión fija del 25% que Finanzas y Diezmo.
       let sesionesQuery = supabase.from('sesiones').select('valor, monto_pagado, monto_diezmado, diezmo_entregado, duracion_minutos, traido_por, pacientes(nombre, id, fisioterapeuta, traido_por_fisio), citas(fisioterapeuta, estado, fecha, hora_inicio)').gte('fecha', startDate).lte('fecha', endDate)
       let citasMesQuery = supabase.from('citas').select('duracion_minutos').eq('estado', 'completada').gte('fecha', startDate).lte('fecha', endDate)
       

@@ -177,12 +177,20 @@ export default function EditarPacientePage() {
             <h2 className="font-display italic text-5xl mb-1 text-slate-900">Perfil del Paciente</h2>
             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest italic">Gestión exhaustiva de paciente</p>
           </div>
-          <Link
-            href={`/pacientes/${id}/evaluacion`}
-            className="px-5 py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-200 hover:bg-rose-700 transition-all flex items-center gap-2 active:scale-95"
-          >
-            <FileText size={16} /> Evaluación
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/pacientes/${id}/evaluacion-inicial`}
+              className="px-5 py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-200 hover:bg-rose-700 transition-all flex items-center gap-2 active:scale-95"
+            >
+              <FileText size={16} /> Evaluación inicial
+            </Link>
+            <Link
+              href={`/pacientes/${id}/evaluacion`}
+              className="px-5 py-3 bg-rose-100 text-rose-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-200 transition-all flex items-center gap-2 active:scale-95"
+            >
+              <FileText size={16} /> Re-evaluación
+            </Link>
+          </div>
         </div>
       </header>
 

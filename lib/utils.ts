@@ -66,21 +66,21 @@ export const getMonthDateRange = (yyyyMM: string) => {
 // ─── Reparto de ingresos entre la dueña y las fisioterapeutas ───────────────
 // Regla de negocio: el valor de un plan se reparte por sesión. Cada sesión que
 // REALIZA una empleada (cita completada asignada a ella) le genera un 25% de
-// comisión, o un 30% si fue ella quien trajo al paciente. El resto es ganancia de
+// comisión fija del 25%. El resto es ganancia de
 // Liliana (dueña de la clínica), que además se queda el 100% de las sesiones que
 // ella misma realiza. El diezmo (10%) sale solo de la ganancia de Liliana; las
 // empleadas no diezman.
 
-export const FISIOTERAPEUTAS: Fisioterapeuta[] = ['Liliana', 'Luisa', 'Jeniffer']
+export const FISIOTERAPEUTAS: Fisioterapeuta[] = ['Liliana', 'Jeniffer']
 // Liliana es la dueña: lo que ella atiende es ganancia, no comisión.
 export const DUENA: Fisioterapeuta = 'Liliana'
 
 // La marca/entidad bajo la que se emiten todos los documentos, sin importar qué
-// fisio haga la evaluación (Luisa y Jeniffer trabajan desde la entidad de Liliana).
+// fisio haga la evaluación (Jeniffer trabaja desde la entidad de Liliana).
 export const ENTIDAD = "Liliana's Therapy"
 
 // Identidad profesional de cada fisio para el documento de evaluación (encabezado
-// y firma). Se guarda fija en código porque son solo tres y cambian rara vez.
+// y firma). Se guarda fija en código porque son solo dos y cambian rara vez.
 // `firma` apunta a un PNG en /public con fondo transparente y tinta oscura, ya
 // procesado por scripts/procesar-firmas.js (recorte + transparencia).
 export interface PerfilFisio {
@@ -97,12 +97,6 @@ export const PERFILES_FISIO: Record<Fisioterapeuta, PerfilFisio> = {
     registro_profesional: '28681',
     firma: '/firma-liliana.png',
   },
-  Luisa: {
-    nombre_completo: 'Luisa Jiménez',
-    especialidad: 'Fisioterapia',
-    registro_profesional: '32167',
-    firma: '/firma-luisa.png',
-  },
   Jeniffer: {
     nombre_completo: 'Jeniffer Racedo',
     especialidad: 'Fisioterapia',
@@ -112,11 +106,10 @@ export const PERFILES_FISIO: Record<Fisioterapeuta, PerfilFisio> = {
 }
 export const EMPLEADAS = FISIOTERAPEUTAS.filter(f => f !== DUENA)
 export const COMISION_BASE = 0.25
-export const COMISION_REFERIDO = 0.30
+export const COMISION_REFERIDO = COMISION_BASE
 
-// Quién está usando la app. Antes esto era un booleano `isLuisa` repetido en una
-// docena de pantallas; con tres fisioterapeutas hace falta saber CUÁL es, no solo
-// si es la dueña o no (si no, Jeniffer entraría identificada como Liliana).
+// Quién está usando la app. Liliana es la dueña y Jeniffer la fisioterapeuta
+// contratada.
 export const getFisioDeEmail = (email?: string | null): Fisioterapeuta => {
   const correo = (email || '').toLowerCase()
   return FISIOTERAPEUTAS.find(f => correo.includes(f.toLowerCase())) ?? DUENA
@@ -146,7 +139,7 @@ export interface PlanFinanzas {
   // Fisioterapeuta que trajo al paciente para ESTE plan. Se decide al crearlo y
   // manda sobre el flag del paciente: el mismo paciente puede volver más adelante
   // por su cuenta, y ese plan va al 25%. Es un nombre y no un booleano porque un
-  // plan puede tener citas de varias fisios, y solo la que lo trajo cobra el 30%.
+  // plan puede tener citas de varias fisios. El dato se mantiene por compatibilidad.
   traido_por?: string | null
   citas?: { fisioterapeuta?: string | null; estado?: string | null; fecha?: string | null; hora_inicio?: string | null }[]
   // Viene del join de Supabase: `pacientes(fisioterapeuta, traido_por_fisio)`.
@@ -170,11 +163,10 @@ export const getQuienTrajo = (plan: PlanFinanzas): string | null => {
   return paciente?.traido_por_fisio ? (paciente.fisioterapeuta ?? null) : null
 }
 
-// 30% SOLO para la fisio que trajo al paciente; el resto de empleadas al 25%.
-// La dueña nunca cobra comisión.
+// Jeniffer cobra siempre el 25%. La dueña nunca cobra comisión.
 export const getTasaComision = (fisio?: string | null, quienTrajo?: string | null) => {
   if (!fisio || fisio === DUENA) return 0
-  return fisio === quienTrajo ? COMISION_REFERIDO : COMISION_BASE
+  return COMISION_BASE
 }
 
 export const esCitaCompletada = (estado?: string | null) => {
@@ -214,10 +206,8 @@ const calcularComisionesConBase = (plan: PlanFinanzas, recaudo: number) => {
 
   // El recaudo se reparte sesión por sesión en ORDEN CRONOLÓGICO: si el paciente
   // no ha pagado todo el plan, las últimas sesiones quedan sin cubrir y esa
-  // comisión aún no se debe. Ordenar importa porque ahora las tasas difieren
-  // (25% / 30%): repartir en el orden del array daría un resultado distinto según
-  // cómo viniera la consulta. Es el mismo criterio que usa la pantalla de Finanzas
-  // para liquidar, así que ambas cuadran.
+  // comisión aún no se debe. Se conserva el orden cronológico para que Finanzas y
+  // Diezmo repartan el recaudo con el mismo criterio.
   const completadas = (plan.citas || [])
     .filter(c => esCitaCompletada(c.estado) && c.fisioterapeuta && c.fisioterapeuta !== DUENA)
     .slice()

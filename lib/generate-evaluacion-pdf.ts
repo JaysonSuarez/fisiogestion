@@ -228,7 +228,7 @@ export function generateEvaluacionPDF(
   doc.setTextColor(...WHITE as [number, number, number])
   doc.setFontSize(20)
   doc.setFont('helvetica', 'bold')
-  doc.text('Evaluación Fisioterapéutica', margin, 23)
+  doc.text('Re-evaluación Fisioterapéutica', margin, 23)
 
   // Fisio que realizó la evaluación
   doc.setFontSize(9)
@@ -434,6 +434,6 @@ export function generateEvaluacionPDF(
   }
 
   // Save
-  const fileName = `Evaluacion_${evaluacion.nombre.replace(/\s+/g, '_')}_${evaluacion.fecha_valoracion}.pdf`
+  const fileName = `Reevaluacion_${evaluacion.nombre.replace(/\s+/g, '_')}_${evaluacion.fecha_valoracion}.pdf`
   doc.save(fileName)
 }

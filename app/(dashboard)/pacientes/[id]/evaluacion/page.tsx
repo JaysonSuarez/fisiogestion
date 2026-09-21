@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase, getCachedUser } from '@/lib/supabase'
@@ -144,6 +144,11 @@ export default function EvaluacionPage() {
   const [patient, setPatient] = useState<any>(null)
   const [evaluacion, setEvaluacion] = useState<any>(null)
   const [profesional, setProfesional] = useState<any>(null)
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const hydratedRef = useRef(false)
+  const dirtyRef = useRef(false)
+  const autosaveTimeoutRef = useRef<number | null>(null)
+  const draftKey = `fisiogestion:evaluacion:${pacienteId}:reevaluacion`
 
   // All form fields
   const [form, setForm] = useState({
@@ -184,8 +189,10 @@ export default function EvaluacionPage() {
     mapa_dolor: [] as any[]
   })
 
-  const updateField = (key: string, value: string) =>
+  const updateField = (key: string, value: string) => {
+    dirtyRef.current = true
     setForm(prev => ({ ...prev, [key]: value }))
+  }
 
   const [generatingPlan, setGeneratingPlan] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -241,6 +248,45 @@ export default function EvaluacionPage() {
     loadData()
   }, [])
 
+  useEffect(() => {
+    if (!hydratedRef.current || loading || !dirtyRef.current) return
+
+    const savedAt = new Date().toISOString()
+    localStorage.setItem(draftKey, JSON.stringify({ form, selectedFisio, savedAt }))
+    setDraftStatus('saving')
+
+    autosaveTimeoutRef.current = window.setTimeout(async () => {
+      const payload = {
+        paciente_id: pacienteId,
+        ...form,
+        fisioterapeuta: selectedFisio,
+        tipo: 'reevaluacion',
+        estado: 'borrador',
+        escala_eva: form.escala_eva ? parseInt(form.escala_eva) : null,
+        autosave_at: savedAt,
+        updated_at: savedAt,
+      }
+      const { data, error } = await supabase
+        .from('evaluaciones')
+        .upsert(payload, { onConflict: 'paciente_id,tipo' })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('No se pudo sincronizar el borrador de re-evaluación:', error)
+        setDraftStatus('error')
+        return
+      }
+      setEvaluacion(data)
+      dirtyRef.current = false
+      setDraftStatus('saved')
+    }, 900)
+
+    return () => {
+      if (autosaveTimeoutRef.current) window.clearTimeout(autosaveTimeoutRef.current)
+    }
+  }, [form, selectedFisio, loading, draftKey, pacienteId])
+
   async function loadData() {
     try {
       const user = await getCachedUser()
@@ -249,7 +295,7 @@ export default function EvaluacionPage() {
 
       const [pRes, evalRes] = await Promise.all([
         supabase.from('pacientes').select('*').eq('id', pacienteId).single(),
-        supabase.from('evaluaciones').select('*').eq('paciente_id', pacienteId).maybeSingle()
+        supabase.from('evaluaciones').select('*').eq('paciente_id', pacienteId).eq('tipo', 'reevaluacion').maybeSingle()
       ])
 
       const pData = pRes.data
@@ -279,6 +325,23 @@ export default function EvaluacionPage() {
       } else {
         setSelectedFisio(fisio)
       }
+
+      const localDraft = localStorage.getItem(draftKey)
+      if (localDraft) {
+        try {
+          const parsed = JSON.parse(localDraft)
+          const remoteDate = eData?.autosave_at || eData?.updated_at || ''
+          if (parsed?.form && (!remoteDate || parsed.savedAt > remoteDate)) {
+            Object.assign(newForm, parsed.form)
+            dirtyRef.current = true
+            if (FISIOTERAPEUTAS.includes(parsed.selectedFisio)) {
+              setSelectedFisio(parsed.selectedFisio)
+            }
+          }
+        } catch {
+          localStorage.removeItem(draftKey)
+        }
+      }
       setForm(newForm)
 
       // Load professional settings
@@ -288,6 +351,7 @@ export default function EvaluacionPage() {
         .limit(1)
         .single()
       setProfesional(profData)
+      hydratedRef.current = true
 
     } catch (err) {
       console.error(err)
@@ -297,6 +361,7 @@ export default function EvaluacionPage() {
   }
 
   async function handleSave() {
+    if (autosaveTimeoutRef.current) window.clearTimeout(autosaveTimeoutRef.current)
     setSaving(true)
     try {
       // Sync doc and sex to patient if they were added
@@ -314,7 +379,10 @@ export default function EvaluacionPage() {
         paciente_id: pacienteId,
         ...form,
         fisioterapeuta: selectedFisio,
+        tipo: 'reevaluacion',
+        estado: 'completada',
         escala_eva: form.escala_eva ? parseInt(form.escala_eva) : null,
+        autosave_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
 
@@ -333,6 +401,9 @@ export default function EvaluacionPage() {
         if (error) throw error
         setEvaluacion(data)
       }
+      localStorage.removeItem(draftKey)
+      dirtyRef.current = false
+      setDraftStatus('saved')
     } catch (err) {
       console.error(err)
     } finally {
@@ -363,6 +434,7 @@ export default function EvaluacionPage() {
   }
 
   const toggleZonaDolor = (zona: string) => {
+    dirtyRef.current = true
     setForm(prev => {
       const current = prev.mapa_dolor || []
       const next = current.includes(zona)
@@ -398,8 +470,12 @@ export default function EvaluacionPage() {
             <ArrowLeft size={20} className="text-rose-300 group-hover:text-rose-600" />
           </Link>
           <div className="flex-1">
-            <h2 className="font-display italic text-4xl sm:text-5xl text-rose-950 tracking-tighter mb-1">Evaluación</h2>
+            <h2 className="font-display italic text-4xl sm:text-5xl text-rose-950 tracking-tighter mb-1">Re-evaluación</h2>
             <p className="text-rose-400 font-bold text-xs uppercase tracking-widest">{patient.nombre}</p>
+            <p className={`mt-2 text-[9px] font-black uppercase tracking-widest ${draftStatus === 'error' ? 'text-amber-600' : 'text-emerald-500'}`}>
+              {draftStatus === 'saving' ? 'Guardando borrador…' : draftStatus === 'error' ? 'Borrador local guardado · falta sincronizar' : draftStatus === 'saved' ? 'Borrador guardado' : 'Guardado automático activo'}
+            </p>
+            <Link href={`/pacientes/${pacienteId}/evaluacion-inicial`} className="mt-2 inline-block text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-700">Abrir evaluación inicial →</Link>
           </div>
           <div className="flex gap-2">
             <button
@@ -436,7 +512,10 @@ export default function EvaluacionPage() {
               <label className="text-[10px] font-black text-rose-300 uppercase tracking-widest mb-2 block font-bold">Fisioterapeuta Asignada</label>
               <select
                 value={selectedFisio}
-                onChange={e => setSelectedFisio(e.target.value as Fisioterapeuta)}
+                onChange={e => {
+                  dirtyRef.current = true
+                  setSelectedFisio(e.target.value as Fisioterapeuta)
+                }}
                 className="w-full bg-rose-50/50 border border-rose-100 text-rose-950 font-black rounded-[20px] px-4 py-3 shadow-sm uppercase tracking-widest text-xs outline-none focus:ring-2 focus:ring-rose-200 cursor-pointer"
               >
                 {FISIOTERAPEUTAS.map(f => <option key={f} value={f}>{f}</option>)}
@@ -735,7 +814,7 @@ export default function EvaluacionPage() {
             className="px-6 py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-200 hover:bg-rose-700 transition-all flex items-center gap-2 disabled:opacity-50 active:scale-95"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {saving ? 'Guardando…' : 'Guardar Evaluación'}
+            {saving ? 'Guardando…' : 'Finalizar Re-evaluación'}
           </button>
         </div>
       </div>

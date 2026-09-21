@@ -101,7 +101,7 @@ function FinanzasContent() {
       const deudoresRaw = pendientes?.filter(s => !(s as any).cortesia && (s.monto_pagado || 0) < s.valor) || []
 
       // Citas que las empleadas realizaron (completadas) en el mes → comisión del
-      // 25%, o del 30% si fue esa fisio quien trajo al paciente. La comisión sale
+      // 25%. La comisión sale
       // SOLO de lo pagado (salvo cortesía): se reparte el recaudo del plan entre
       // sus sesiones por orden cronológico.
       const { data: citasEmp } = await supabase
@@ -282,7 +282,7 @@ function FinanzasContent() {
     }
   }
 
-  async function handlePagarLuisa() {
+  async function handlePagarComisiones() {
     const idsPendientes = citasFisiosProcesadas.filter(c => !c.pagado).map(c => c.id)
     if (idsPendientes.length === 0) return
 
@@ -299,7 +299,7 @@ function FinanzasContent() {
         isOpen: true,
         type: 'success',
         title: 'Pago Registrado',
-        message: 'Se han marcado las comisiones de Luisa como pagadas.'
+        message: 'Se han marcado las comisiones de Jeniffer como pagadas.'
       })
       loadData()
     } catch (err) {
@@ -317,7 +317,7 @@ function FinanzasContent() {
 
   // Alterna el estado de pago de una comisión (pagado ↔ pendiente).
   // Permite corregir cuando se marcó como pagado sin haberse pagado.
-  async function handleToggleComisionLuisa(citaId: string, currentlyPaid: boolean) {
+  async function handleToggleComision(citaId: string, currentlyPaid: boolean) {
     setSaving(true)
     try {
       const { error } = await supabase
@@ -341,7 +341,7 @@ function FinanzasContent() {
   }
 
   // Revierte todas las comisiones pagadas del mes a "pendiente".
-  async function handleRevertirLuisa() {
+  async function handleRevertirComisiones() {
     const idsPagados = citasFisiosProcesadas.filter(c => c.pagado).map(c => c.id)
     if (idsPagados.length === 0) return
 
@@ -358,7 +358,7 @@ function FinanzasContent() {
         isOpen: true,
         type: 'success',
         title: 'Pagos Revertidos',
-        message: 'Las comisiones de Luisa volvieron a estado pendiente.'
+        message: 'Las comisiones de Jeniffer volvieron a estado pendiente.'
       })
       loadData()
     } catch (err) {
@@ -550,7 +550,7 @@ function FinanzasContent() {
         </div>
       </div>
 
-      {/* ── COMISIONES DE LUISA ── */}
+      {/* ── COMISIONES DE JENIFFER ── */}
       <div className="mb-14">
         <div className="flex items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
@@ -559,7 +559,7 @@ function FinanzasContent() {
           </div>
           {comisionPendienteFisios > 0 ? (
             <button
-              onClick={handlePagarLuisa}
+              onClick={handlePagarComisiones}
               disabled={saving}
               className="px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 font-black text-[10px] uppercase tracking-[0.2em] rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
             >
@@ -568,7 +568,7 @@ function FinanzasContent() {
             </button>
           ) : citasFisiosProcesadas.some(c => c.pagado) ? (
             <button
-              onClick={handleRevertirLuisa}
+              onClick={handleRevertirComisiones}
               disabled={saving}
               className="px-4 py-2 bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100 font-black text-[10px] uppercase tracking-[0.2em] rounded-xl flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
             >
@@ -610,11 +610,11 @@ function FinanzasContent() {
                       <div className="text-right">
                          <div className="text-xs font-black text-amber-600">{formatCOP(c.comision)}</div>
                          <div className="text-[8px] font-bold text-rose-300 uppercase tracking-widest">
-                           {Math.round(c.tasa * 100)}% comisión{c.tasa > 0.25 ? ' · trajo al paciente' : ''}
+                           {Math.round(c.tasa * 100)}% comisión
                          </div>
                       </div>
                       <button
-                        onClick={() => handleToggleComisionLuisa(c.id, c.pagado)}
+                        onClick={() => handleToggleComision(c.id, c.pagado)}
                         disabled={saving}
                         title={c.pagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
                         className={`badge !text-[8px] !font-black !px-2 !py-1 !rounded-md uppercase cursor-pointer hover:opacity-70 transition-opacity disabled:opacity-50 ${c.pagado ? '!bg-emerald-50 !text-emerald-500 border border-emerald-100' : '!bg-rose-100 !text-rose-600 border border-rose-200'}`}

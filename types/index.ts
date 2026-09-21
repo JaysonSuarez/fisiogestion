@@ -4,7 +4,7 @@ export type EstadoPaciente = 'activo' | 'en_pausa' | 'alta_medica'
 export type MetodoPago = 'efectivo' | 'transferencia' | 'otro'
 export type EstadoPago = 'pagado' | 'pendiente'
 export type EstadoCita = 'confirmada' | 'pendiente' | 'cancelada' | 'completada'
-export type Fisioterapeuta = 'Liliana' | 'Luisa' | 'Jeniffer'
+export type Fisioterapeuta = 'Liliana' | 'Jeniffer'
 export type PagoTerapeuta = 'pagado' | 'pendiente'
 
 export interface Paciente {
@@ -22,7 +22,8 @@ export interface Paciente {
   sexo?: string
   fecha_nacimiento?: string
   fisioterapeuta?: Fisioterapeuta
-  // La fisioterapeuta asignada trajo a este paciente: sus sesiones pagan 30%.
+  // Campo heredado. Se conserva por compatibilidad, pero la comisión de
+  // Jeniffer es siempre del 25%.
   traido_por_fisio?: boolean
 }
 

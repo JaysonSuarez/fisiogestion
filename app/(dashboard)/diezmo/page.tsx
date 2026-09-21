@@ -31,7 +31,7 @@ export default function DiezmoPage() {
   async function loadTotals() {
     try {
       // Traemos las sesiones que aún tienen recaudo pendiente por diezmar.
-      // `pacientes(...)` hace falta para saber si la fisio trajo al paciente (30%).
+      // Incluimos los datos relacionados requeridos por el cálculo financiero.
       const { data } = await supabase
         .from('sesiones')
         .select('valor, monto_pagado, monto_diezmado, duracion_minutos, cortesia, traido_por, citas(fisioterapeuta, estado, fecha, hora_inicio), pacientes(fisioterapeuta, traido_por_fisio)')
@@ -165,7 +165,7 @@ export default function DiezmoPage() {
             </div>
             <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest block mb-2">Ganancia de Liliana</span>
             <div className="text-4xl font-black text-rose-950 tracking-tighter">{formatCOP(gananciaLiliana)}</div>
-            <p className="text-[9px] font-bold text-rose-300 uppercase tracking-widest mt-2 italic">Recaudado menos la comisión de Luisa</p>
+            <p className="text-[9px] font-bold text-rose-300 uppercase tracking-widest mt-2 italic">Recaudado menos la comisión de Jeniffer</p>
           </div>
         </div>
 
@@ -192,7 +192,7 @@ export default function DiezmoPage() {
           </div>
           
           <div className="space-y-6">
-            {/* Flujo del dinero: recaudado → comisión Luisa → ganancia → diezmo */}
+            {/* Flujo del dinero: recaudado → comisión Jeniffer → ganancia → diezmo */}
             <div className="space-y-2">
               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                 <span className="text-sm font-bold text-slate-700">Recaudado (bruto)</span>

@@ -9,9 +9,9 @@
 //
 // Ejecutar: node scripts/procesar-firmas.js
 //
-// Nota: los escaneos originales de Luisa y Jeniffer ya no están disponibles;
-// sus PNG (firma-luisa.png / firma-jeniffer.png) ya renderizan bien y se
-// versionan directamente. Aquí solo se regenera Liliana desde su original.
+// Nota: el escaneo original de Jeniffer ya no está disponible; su PNG
+// (firma-jeniffer.png) ya renderiza bien y se versiona directamente.
+// Aquí solo se regenera Liliana desde su original.
 const sharp = require('sharp')
 const path = require('path')
 

@@ -38,11 +38,8 @@ export default function NuevaSesionPage({
   const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
 
   const [pacienteId, setPacienteId] = useState(resolvedParams.paciente ?? '')
-  // Quién atenderá este plan y si esa fisio trajo al paciente (30% en vez de 25%).
-  // El 30% se guarda EN EL PLAN: el mismo paciente puede volver luego por su
-  // cuenta, y ese plan nuevo va al 25%.
+  // Quién atenderá este plan. Jeniffer cobra una comisión fija del 25%.
   const [fisioPlan, setFisioPlan] = useState<Fisioterapeuta>('Liliana')
-  const [traidoPorFisio, setTraidoPorFisio] = useState(false)
   const [cantidadSesiones, setCantidadSesiones] = useState<number>(1)
   const [valorPorSesion, setValorPorSesion] = useState<number>(30000)
   const [tipoPlan, setTipoPlan] = useState('valoracion')
@@ -78,7 +75,7 @@ export default function NuevaSesionPage({
         const fisio = getFisioDeEmail(user?.email)
         setFisioActiva(fisio)
 
-        let query = supabase.from('pacientes').select('id, nombre, fisioterapeuta, traido_por_fisio').order('nombre')
+        let query = supabase.from('pacientes').select('id, nombre, fisioterapeuta').order('nombre')
         if (!esDuena(fisio)) {
           query = query.eq('fisioterapeuta', fisio)
         }
@@ -95,13 +92,11 @@ export default function NuevaSesionPage({
     loadPacientes()
   }, [])
 
-  // Al elegir paciente se precargan la fisio asignada y su marca de "lo trajo",
-  // como valor por defecto. Siguen siendo editables: manda lo que quede en el plan.
+  // Al elegir paciente se precarga la fisioterapeuta asignada.
   useEffect(() => {
     const p = pacientes.find(x => x.id === pacienteId)
     if (!p) return
     setFisioPlan((p.fisioterapeuta as Fisioterapeuta) || 'Liliana')
-    setTraidoPorFisio(!!p.traido_por_fisio)
   }, [pacienteId, pacientes])
 
   const opcionesSesiones = [
@@ -186,11 +181,6 @@ export default function NuevaSesionPage({
       // Si quien crea el plan es una empleada, las citas son suyas; si es la dueña,
       // atiende la fisioterapeuta que eligió en el formulario.
       const activeFisio = esDuena(fisio) ? fisioPlan : fisio
-      // Se guarda QUIÉN trajo al paciente, no un simple sí/no: si luego se reasigna
-      // alguna cita del plan a otra fisio, esa otra cobra su 25% normal.
-      // El 30% solo lo decide la dueña: una empleada no puede subirse la comisión.
-      const traidoPor = esDuena(fisio) && traidoPorFisio && !esDuena(fisioPlan) ? fisioPlan : null
-
       let currentCitaDate = new Date(fechaInicioStr + 'T12:00:00')
       let abonoRestante = hizoAbono && esDuena(fisio) ? Number(montoAbono) : 0
 
@@ -222,7 +212,7 @@ export default function NuevaSesionPage({
         estado_pago: (hizoAbono && esDuena(fisio) && abonoRestante >= valorConDescuento) ? 'pagado' : 'pendiente',
         nota_clinica: `[Plan de ${tipoPlan === 'valoracion' ? 'Valoración' : cantidadSesiones + ' sesiones'}] ${nota_clinica}${notaCupon}`,
         duracion_minutos: 60 * cantidadSesiones,
-        traido_por: traidoPor
+        traido_por: null
       }]).select('id').single()
 
       if (planError) throw planError
@@ -343,8 +333,7 @@ export default function NuevaSesionPage({
               </select>
             </div>
 
-            {/* Solo la dueña elige quién atiende y la comisión: a una empleada se le
-                asignan sus propias citas, sin poder subirse el porcentaje. */}
+            {/* Solo la dueña elige quién atiende; Jeniffer tiene comisión fija. */}
             {esDuena(fisioActiva) && (
               <div className="form-group">
                 <label className="text-[10px] font-black text-rose-300 uppercase tracking-[0.2em] mb-4 block flex items-center gap-2">
@@ -360,23 +349,9 @@ export default function NuevaSesionPage({
                   ))}
                 </select>
 
-                {esDuena(fisioPlan) ? (
-                  <p className="text-[10px] font-bold text-rose-300 mt-3 px-2">
-                    Liliana no cobra comisión: lo que atiende es ganancia.
-                  </p>
-                ) : (
-                  <label className="mt-4 flex items-center gap-4 px-6 py-4 rounded-[28px] border-2 border-rose-100 bg-rose-50/40 cursor-pointer hover:bg-rose-50 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={traidoPorFisio}
-                      onChange={e => setTraidoPorFisio(e.target.checked)}
-                      className="w-5 h-5 rounded-md border-2 border-rose-200 focus:ring-rose-200 cursor-pointer accent-rose-600"
-                    />
-                    <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">
-                      {fisioPlan} trajo al paciente · comisión {traidoPorFisio ? '30%' : '25%'}
-                    </span>
-                  </label>
-                )}
+                <p className="text-[10px] font-bold text-rose-300 mt-3 px-2">
+                  {esDuena(fisioPlan) ? 'Liliana no cobra comisión: lo que atiende es ganancia.' : 'Jeniffer cobra una comisión fija del 25%.'}
+                </p>
               </div>
             )}
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase, getCachedUser } from '@/lib/supabase'
-import { FileText, Plus, Search, Loader2, ArrowRight, Trash2, Flower2 } from 'lucide-react'
+import { FileText, Plus, Search, Loader2, ArrowRight, Trash2, RefreshCw } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import { useRouter } from 'next/navigation'
 import { getFisioDeEmail, esDuena } from '@/lib/utils'
@@ -15,6 +15,9 @@ export default function EvaluacionesIndexPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [evalDeleting, setEvalDeleting] = useState<string | null>(null)
   const router = useRouter()
+  const routeFor = (evaluation: any) => evaluation.tipo === 'inicial'
+    ? `/pacientes/${evaluation.paciente_id}/evaluacion-inicial`
+    : `/pacientes/${evaluation.paciente_id}/evaluacion`
 
   useEffect(() => {
     loadData()
@@ -131,10 +134,9 @@ export default function EvaluacionesIndexPage() {
                   <p className="text-center text-rose-300 text-[10px] font-black uppercase tracking-widest py-8 italic">No hay resultados ✨</p>
                 ) : (
                   pacientesFiltrados.map(paciente => (
-                    <Link
+                    <div
                       key={paciente.id}
-                      href={`/pacientes/${paciente.id}/evaluacion`}
-                      className="flex justify-between items-center p-5 rounded-[24px] border border-rose-50 hover:border-rose-200 hover:bg-white hover:shadow-lg hover:shadow-rose-100/50 transition-all group"
+                      className="p-5 rounded-[24px] border border-rose-50 hover:border-rose-200 hover:bg-white hover:shadow-lg hover:shadow-rose-100/50 transition-all group"
                     >
                       <div>
                         <div className="font-black text-rose-950 text-sm uppercase tracking-tight">{paciente.nombre}</div>
@@ -144,10 +146,15 @@ export default function EvaluacionesIndexPage() {
                           </div>
                         )}
                       </div>
-                      <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-300 group-hover:text-rose-600 group-hover:bg-rose-100 transition-all">
-                        <ArrowRight size={16} />
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <Link href={`/pacientes/${paciente.id}/evaluacion-inicial`} className="flex items-center justify-center gap-1 rounded-xl bg-rose-600 px-3 py-2.5 text-[8px] font-black uppercase tracking-wider text-white transition hover:bg-rose-700">
+                          <ArrowRight size={13} /> Inicial
+                        </Link>
+                        <Link href={`/pacientes/${paciente.id}/evaluacion`} className="flex items-center justify-center gap-1 rounded-xl bg-rose-50 px-3 py-2.5 text-[8px] font-black uppercase tracking-wider text-rose-600 transition hover:bg-rose-100">
+                          <RefreshCw size={12} /> Re-evaluación
+                        </Link>
                       </div>
-                    </Link>
+                    </div>
                   ))
                 )}
               </div>
@@ -176,14 +183,16 @@ export default function EvaluacionesIndexPage() {
                   >
                     <div 
                       className="flex items-center gap-5 flex-1 cursor-pointer"
-                      onClick={() => router.push(`/pacientes/${ev.paciente_id}/evaluacion`)}
+                      onClick={() => router.push(routeFor(ev))}
                     >
                       <div className="w-14 h-14 bg-rose-950 text-rose-100 rounded-2xl flex items-center justify-center group-hover:bg-rose-600 group-hover:text-white transition-all shrink-0 shadow-lg">
                         <FileText size={22} />
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-black text-rose-950 truncate uppercase tracking-tight text-lg">{ev.pacientes?.nombre || 'Paciente Desconocido'}</h4>
-                        <p className="text-[10px] text-rose-300 font-black uppercase tracking-widest mt-1 flex items-center gap-3">
+                        <p className="text-[10px] text-rose-300 font-black uppercase tracking-widest mt-1 flex flex-wrap items-center gap-3">
+                          <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-600">{ev.tipo === 'inicial' ? 'Evaluación inicial' : 'Re-evaluación'}</span>
+                          {ev.estado === 'borrador' && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-600">Borrador</span>}
                           <span className="text-rose-500">{new Date(ev.fecha_valoracion + 'T12:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}</span>
                           {ev.motivo_consulta && (
                             <>
@@ -206,7 +215,7 @@ export default function EvaluacionesIndexPage() {
                         <Trash2 size={20} />
                       </button>
                       <button 
-                        onClick={() => router.push(`/pacientes/${ev.paciente_id}/evaluacion`)}
+                        onClick={() => router.push(routeFor(ev))}
                         className="px-6 py-3 bg-rose-50 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-950 hover:text-white transition-all active:scale-95"
                       >
                         Ver Detalles
