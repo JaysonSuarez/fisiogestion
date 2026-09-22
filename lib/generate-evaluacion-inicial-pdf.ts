@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import { ENTIDAD } from '@/lib/utils'
-import type { EvaluacionInicialForm } from '@/lib/evaluacion-inicial'
+import { splitPatientName, type EvaluacionInicialForm } from '@/lib/evaluacion-inicial'
 
 interface ProfesionalData {
   direccion?: string
@@ -145,18 +145,17 @@ export function generateEvaluacionInicialPDF(
     { label: 'Segundo nombre', value: evaluacion.segundo_nombre },
     { label: 'Edad', value: evaluacion.edad ? `${evaluacion.edad} años` : '' },
     { label: 'Identificación o pasaporte', value: evaluacion.documento_identidad },
-    { label: 'Fecha de nacimiento', value: evaluacion.fecha_nacimiento },
     { label: 'Sexo', value: evaluacion.sexo },
-    { label: 'Estado civil', value: evaluacion.estado_civil },
     { label: 'Teléfono', value: paciente.telefono },
   ])
 
-  section(2, 'Información de vivienda')
+  section(2, 'Toma de signos vitales')
   fieldGrid([
-    { label: 'Municipio', value: evaluacion.municipio },
-    { label: 'Vereda o sector', value: evaluacion.vereda_sector },
-    { label: 'Referencia de vivienda', value: evaluacion.referencia_vivienda },
-  ], 3)
+    { label: 'FR (Frecuencia respiratoria)', value: evaluacion.fr },
+    { label: 'FC (Frecuencia cardíaca)', value: evaluacion.fc },
+    { label: 'TA (Tensión arterial)', value: evaluacion.ta },
+    { label: 'Auscultación', value: evaluacion.auscultacion },
+  ], 2)
 
   section(3, 'Discapacidad y clasificación')
   fieldGrid([
@@ -168,15 +167,23 @@ export function generateEvaluacionInicialPDF(
     { label: 'Movilidad y relaciones interpersonales', value: evaluacion.actividad_movilidad_relaciones },
   ])
 
-  section(4, 'Datos del profesional remitente')
+  const nameParts = splitPatientName(fisio.nombre_completo)
+  const primerNombre = evaluacion.medico_primer_nombre || nameParts.primer_nombre || ''
+  const segundoNombre = evaluacion.medico_segundo_nombre || nameParts.segundo_nombre || ''
+  const primerApellido = evaluacion.medico_primer_apellido || nameParts.primer_apellido || ''
+  const segundoApellido = evaluacion.medico_segundo_apellido || nameParts.segundo_apellido || ''
+  const identificacion = evaluacion.medico_identificacion || fisio.registro_profesional || ''
+  const tipoEmpleado = evaluacion.tipo_empleado || 'Fisioterapeuta'
+
+  section(4, 'Datos del profesional')
   fieldGrid([
-    { label: 'Primer apellido', value: evaluacion.medico_primer_apellido },
-    { label: 'Segundo apellido', value: evaluacion.medico_segundo_apellido },
-    { label: 'Primer nombre', value: evaluacion.medico_primer_nombre },
-    { label: 'Segundo nombre', value: evaluacion.medico_segundo_nombre },
-    { label: 'Número de identidad', value: evaluacion.medico_identificacion },
-    { label: 'Tipo de empleado', value: evaluacion.tipo_empleado },
-    { label: 'Organismo que elabora', value: evaluacion.organismo_elaborador },
+    { label: 'Primer apellido', value: primerApellido },
+    { label: 'Segundo apellido', value: segundoApellido },
+    { label: 'Primer nombre', value: primerNombre },
+    { label: 'Segundo nombre', value: segundoNombre },
+    { label: 'Número de identidad', value: identificacion },
+    { label: 'Tipo de empleado', value: tipoEmpleado },
+    { label: 'Organismo que elabora', value: ENTIDAD },
   ])
 
   section(5, 'Descripción clínica')

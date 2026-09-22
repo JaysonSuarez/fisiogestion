@@ -4,19 +4,20 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
-  ArrowLeft, Building2, CheckCircle2, ClipboardList, Download,
+  Activity, ArrowLeft, CheckCircle2, ClipboardList, Download,
   FileText, HeartPulse, Loader2, Save, Stethoscope, User,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { AITextarea } from '@/components/ui/AITextarea'
 import { supabase, getCachedUser } from '@/lib/supabase'
-import { esDuena, FISIOTERAPEUTAS, getFisioDeEmail, PERFILES_FISIO } from '@/lib/utils'
+import { esDuena, FISIOTERAPEUTAS, getFisioDeEmail, PERFILES_FISIO, ENTIDAD } from '@/lib/utils'
 import type { Fisioterapeuta, Paciente } from '@/types'
 import type { PerfilFisio } from '@/lib/utils'
 import {
   CLASIFICACIONES_FUNCIONALES,
   createEmptyEvaluacionInicial,
   splitPatientName,
+  getDatosProfesional,
   type EvaluacionInicialForm,
 } from '@/lib/evaluacion-inicial'
 import { generateEvaluacionInicialPDF } from '@/lib/generate-evaluacion-inicial-pdf'
@@ -57,24 +58,39 @@ function Section({ number, title, icon: Icon, children }: {
   )
 }
 
-function Field({ label, value, onChange, type = 'text', options, placeholder }: {
+function Field({ label, value, onChange, type = 'text', options, placeholder, readOnly = false }: {
   label: string
   value: string
   onChange: (value: string) => void
   type?: string
   options?: { value: string; label: string }[]
   placeholder?: string
+  readOnly?: boolean
 }) {
   return (
     <label className="block space-y-1.5">
       <span className="text-[9px] font-black uppercase tracking-widest text-rose-300">{label}</span>
       {options ? (
-        <select value={value} onChange={event => onChange(event.target.value)} className="w-full rounded-2xl border border-rose-100 bg-rose-50/50 px-4 py-3 text-sm font-bold text-rose-950 outline-none transition focus:border-rose-300">
+        <select
+          value={value}
+          onChange={event => onChange(event.target.value)}
+          disabled={readOnly}
+          className="w-full rounded-2xl border border-rose-100 bg-rose-50/50 px-4 py-3 text-sm font-bold text-rose-950 outline-none transition focus:border-rose-300 disabled:opacity-60"
+        >
           <option value="">Seleccione…</option>
           {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       ) : (
-        <input type={type} value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} className="w-full rounded-2xl border border-rose-100 bg-rose-50/50 px-4 py-3 text-sm font-bold text-rose-950 outline-none transition focus:border-rose-300" />
+        <input
+          type={type}
+          value={value}
+          onChange={event => onChange(event.target.value)}
+          placeholder={placeholder}
+          readOnly={readOnly}
+          className={`w-full rounded-2xl border border-rose-100 px-4 py-3 text-sm font-bold text-rose-950 outline-none transition ${
+            readOnly ? 'bg-rose-100/40 text-rose-900 cursor-not-allowed select-none' : 'bg-rose-50/50 focus:border-rose-300'
+          }`}
+        />
       )}
     </label>
   )
@@ -103,6 +119,17 @@ export default function EvaluacionInicialPage() {
     setForm(previous => ({ ...previous, [field]: value }))
   }
 
+  const handleFisioChange = (newFisio: Fisioterapeuta) => {
+    dirtyRef.current = true
+    setSelectedFisio(newFisio)
+    const prof = getDatosProfesional(newFisio)
+    setForm(previous => ({
+      ...previous,
+      ...prof,
+      organismo_elaborador: ENTIDAD,
+    }))
+  }
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -122,22 +149,31 @@ export default function EvaluacionInicialPage() {
         setEvaluacion(remote)
         setProfesional(professionalResult.data)
 
-        let nextForm = createEmptyEvaluacionInicial()
+        let targetFisio: Fisioterapeuta = fisio
+        if (remote?.datos_iniciales && typeof remote.datos_iniciales === 'object') {
+          if (FISIOTERAPEUTAS.includes(remote.fisioterapeuta)) {
+            targetFisio = remote.fisioterapeuta
+          }
+        }
+        setSelectedFisio(targetFisio)
+
+        let nextForm = createEmptyEvaluacionInicial(targetFisio)
         if (currentPatient) {
           nextForm = {
             ...nextForm,
             ...splitPatientName(currentPatient.nombre),
             edad: currentPatient.edad ? String(currentPatient.edad) : '',
             documento_identidad: currentPatient.documento_identidad || '',
-            fecha_nacimiento: currentPatient.fecha_nacimiento || '',
             sexo: currentPatient.sexo || '',
           }
         }
         if (remote?.datos_iniciales && typeof remote.datos_iniciales === 'object') {
           nextForm = { ...nextForm, ...remote.datos_iniciales }
-          setSelectedFisio(FISIOTERAPEUTAS.includes(remote.fisioterapeuta) ? remote.fisioterapeuta : fisio)
-        } else {
-          setSelectedFisio(fisio)
+          if (!nextForm.medico_primer_nombre) {
+            const prof = getDatosProfesional(targetFisio)
+            nextForm = { ...nextForm, ...prof }
+          }
+          nextForm.organismo_elaborador = ENTIDAD
         }
 
         const local = localStorage.getItem(draftKey)
@@ -148,7 +184,15 @@ export default function EvaluacionInicialPage() {
             if (parsed?.form && (!remoteDate || parsed.savedAt > remoteDate)) {
               nextForm = { ...nextForm, ...parsed.form }
               dirtyRef.current = true
-              if (FISIOTERAPEUTAS.includes(parsed.selectedFisio)) setSelectedFisio(parsed.selectedFisio)
+              if (FISIOTERAPEUTAS.includes(parsed.selectedFisio)) {
+                targetFisio = parsed.selectedFisio
+                setSelectedFisio(targetFisio)
+              }
+              if (!nextForm.medico_primer_nombre) {
+                const prof = getDatosProfesional(targetFisio)
+                nextForm = { ...nextForm, ...prof }
+              }
+              nextForm.organismo_elaborador = ENTIDAD
             }
           } catch {
             localStorage.removeItem(draftKey)
@@ -185,7 +229,7 @@ export default function EvaluacionInicialPage() {
           sexo: form.sexo || null,
           motivo_consulta: form.objetivo || null,
           tipo_intervencion: form.plan_tratamiento || null,
-          datos_iniciales: form,
+          datos_iniciales: { ...form, organismo_elaborador: ENTIDAD },
           autosave_at: savedAt,
           updated_at: savedAt,
         }, { onConflict: 'paciente_id,tipo' })
@@ -241,7 +285,7 @@ export default function EvaluacionInicialPage() {
           sexo: form.sexo || null,
           motivo_consulta: form.objetivo || null,
           tipo_intervencion: form.plan_tratamiento || null,
-          datos_iniciales: form,
+          datos_iniciales: { ...form, organismo_elaborador: ENTIDAD },
           autosave_at: now,
           updated_at: now,
         }, { onConflict: 'paciente_id,tipo' })
@@ -252,7 +296,6 @@ export default function EvaluacionInicialPage() {
       await supabase.from('pacientes').update({
         documento_identidad: form.documento_identidad || null,
         sexo: form.sexo || null,
-        fecha_nacimiento: form.fecha_nacimiento || null,
         edad: form.edad ? Number(form.edad) : null,
       }).eq('id', pacienteId)
 
@@ -271,12 +314,17 @@ export default function EvaluacionInicialPage() {
   async function handlePDF() {
     if (!patient || !profesional) return
     const perfil = PERFILES_FISIO[selectedFisio]
-    generateEvaluacionInicialPDF(form, patient, profesional, {
-      nombre_completo: perfil.nombre_completo,
-      especialidad: perfil.especialidad,
-      registro_profesional: perfil.registro_profesional,
-      firma: await loadFirma(perfil),
-    })
+    generateEvaluacionInicialPDF(
+      { ...form, organismo_elaborador: ENTIDAD },
+      patient,
+      profesional,
+      {
+        nombre_completo: perfil.nombre_completo,
+        especialidad: perfil.especialidad,
+        registro_profesional: perfil.registro_profesional,
+        firma: await loadFirma(perfil),
+      }
+    )
   }
 
   if (loading) {
@@ -326,33 +374,40 @@ export default function EvaluacionInicialPage() {
             <Field label="Segundo nombre" value={form.segundo_nombre} onChange={value => update('segundo_nombre', value)} />
             <Field label="Edad" type="number" value={form.edad} onChange={value => update('edad', value)} />
             <Field label="Identificación o pasaporte" value={form.documento_identidad} onChange={value => update('documento_identidad', value)} />
-            <Field label="Fecha de nacimiento" type="date" value={form.fecha_nacimiento} onChange={value => update('fecha_nacimiento', value)} />
             <Field label="Fecha de valoración" type="date" value={form.fecha_valoracion} onChange={value => update('fecha_valoracion', value)} />
             <Field label="Sexo" value={form.sexo} onChange={value => update('sexo', value)} options={[{ value: 'F', label: 'Femenino' }, { value: 'M', label: 'Masculino' }, { value: 'Otro', label: 'Otro' }]} />
-            <Field label="Estado civil" value={form.estado_civil} onChange={value => update('estado_civil', value)} options={['Soltero/a', 'Casado/a', 'Unión libre', 'Separado/a', 'Viudo/a'].map(value => ({ value, label: value }))} />
           </div>
-          {esDuena(fisioActiva) && <div className="max-w-sm"><Field label="Fisioterapeuta que evalúa" value={selectedFisio} onChange={value => {
-            dirtyRef.current = true
-            setSelectedFisio(value as Fisioterapeuta)
-          }} options={FISIOTERAPEUTAS.map(value => ({ value, label: value }))} /></div>}
         </Section>
 
-        <Section number={2} title="Información de vivienda" icon={Building2}>
+        <Section number={2} title="Toma de signos vitales" icon={Activity}>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Municipio" value={form.municipio} onChange={value => update('municipio', value)} />
-            <Field label="Vereda o sector" value={form.vereda_sector} onChange={value => update('vereda_sector', value)} />
-            <Field label="Referencia de vivienda" value={form.referencia_vivienda} onChange={value => update('referencia_vivienda', value)} />
+            <Field label="FR (Frecuencia respiratoria)" placeholder="Ej. 18 rpm" value={form.fr} onChange={value => update('fr', value)} />
+            <Field label="FC (Frecuencia cardíaca)" placeholder="Ej. 75 lpm" value={form.fc} onChange={value => update('fc', value)} />
+            <Field label="TA (Tensión arterial)" placeholder="Ej. 120/80 mmHg" value={form.ta} onChange={value => update('ta', value)} />
+            <div className="sm:col-span-3">
+              <Field label="Auscultación" placeholder="Hallazgos de auscultación (respiratoria / cardíaca)…" value={form.auscultacion} onChange={value => update('auscultacion', value)} />
+            </div>
           </div>
         </Section>
 
         <Section number={3} title="Discapacidad y clasificación" icon={HeartPulse}>
           <p className="rounded-2xl bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700">Selecciona la clasificación funcional registrada durante la valoración. Usa “No aplica” cuando no exista limitación.</p>
           <div className="grid gap-4 sm:grid-cols-2">
-            {classificationFields.map(item => <Field key={item.field} label={item.label} value={form[item.field]} onChange={value => update(item.field, value)} options={CLASIFICACIONES_FUNCIONALES} />)}
+            {classificationFields.map(item => <Field key={item.field} label={item.label} value={form[item.field] || 'No aplica'} onChange={value => update(item.field, value)} options={CLASIFICACIONES_FUNCIONALES} />)}
           </div>
         </Section>
 
-        <Section number={4} title="Datos del profesional remitente" icon={Stethoscope}>
+        <Section number={4} title="Datos del profesional" icon={Stethoscope}>
+          {esDuena(fisioActiva) && (
+            <div className="max-w-sm">
+              <Field
+                label="Fisioterapeuta que evalúa"
+                value={selectedFisio}
+                onChange={value => handleFisioChange(value as Fisioterapeuta)}
+                options={FISIOTERAPEUTAS.map(value => ({ value, label: value }))}
+              />
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Primer apellido" value={form.medico_primer_apellido} onChange={value => update('medico_primer_apellido', value)} />
             <Field label="Segundo apellido" value={form.medico_segundo_apellido} onChange={value => update('medico_segundo_apellido', value)} />
@@ -360,7 +415,14 @@ export default function EvaluacionInicialPage() {
             <Field label="Segundo nombre" value={form.medico_segundo_nombre} onChange={value => update('medico_segundo_nombre', value)} />
             <Field label="Número de identidad" value={form.medico_identificacion} onChange={value => update('medico_identificacion', value)} />
             <Field label="Tipo de empleado" value={form.tipo_empleado} onChange={value => update('tipo_empleado', value)} />
-            <div className="sm:col-span-2"><Field label="Organismo que elabora" value={form.organismo_elaborador} onChange={value => update('organismo_elaborador', value)} /></div>
+            <div className="sm:col-span-2">
+              <Field
+                label="Organismo que elabora"
+                value={ENTIDAD}
+                readOnly
+                onChange={() => {}}
+              />
+            </div>
           </div>
         </Section>
 
