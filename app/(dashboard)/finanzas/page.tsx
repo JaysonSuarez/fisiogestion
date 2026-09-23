@@ -724,7 +724,7 @@ function FinanzasContent() {
                       key={m}
                       type="button"
                       onClick={() => setMetodoPago(m)}
-                      className={`py-4 px-3 rounded-2xl border-2 font-black capitalize transition-all text-xs ${metodoPago === m ? 'border-rose-500 bg-rose-600 text-white shadow-lg shadow-rose-200' : 'border-rose-50 text-rose-300 hover:border-rose-100 bg-rose-50/20'}`}
+                      className={`py-4 px-3 rounded-2xl border-2 font-black transition-all text-xs ${metodoPago === m ? 'border-rose-500 bg-rose-600 text-white shadow-lg shadow-rose-200' : 'border-rose-50 text-rose-300 hover:border-rose-100 bg-rose-50/20'}`}
                     >
                       {m}
                     </button>

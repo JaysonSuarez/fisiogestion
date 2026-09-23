@@ -333,7 +333,7 @@ export default function AgendaPage() {
               <div className="hidden sm:flex p-3 sm:p-4 bg-rose-600 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-rose-200">
                 <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <h3 className="font-black text-lg sm:text-2xl text-rose-950 capitalize tracking-tighter">
+              <h3 className="font-black text-lg sm:text-2xl text-rose-950 tracking-tighter">
                 {format(startOfCurrentWeek, "d", { locale: es })} al {format(addDays(startOfCurrentWeek, 6), "d 'de' MMMM", { locale: es })}
               </h3>
             </div>

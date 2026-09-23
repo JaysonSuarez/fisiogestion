@@ -59,9 +59,10 @@ export default function PatientLoginPage() {
               <input 
                 type="text"
                 autoComplete="username"
+                autoCapitalize="characters"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Tu primer nombre"
+                placeholder="Tu primer nombre (ej. MATEO)"
                 className="w-full pl-12 pr-4 py-4 bg-rose-50/50 border-2 border-transparent focus:border-rose-200 focus:bg-white rounded-3xl outline-none transition-all font-medium text-rose-950 shadow-inner"
                 required
               />

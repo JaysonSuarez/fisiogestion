@@ -142,7 +142,7 @@ export default function PromocionesPage() {
             </div>
             <label className="block text-[10px] font-black text-rose-400 uppercase tracking-widest">Mínimo de sesiones (opcional)
               <input type="number" min="1" value={currentPromo.sesiones_minimas ?? ''} onChange={e => setCurrentPromo({ ...currentPromo, sesiones_minimas: e.target.value ? Number(e.target.value) : null })} placeholder="Ej: 10" className="mt-2 w-full px-4 py-3 rounded-2xl bg-rose-50/50 text-sm font-bold text-rose-950 outline-none focus:ring-2 focus:ring-rose-200" />
-              <span className="block mt-1 text-[10px] normal-case tracking-normal text-slate-500">La promoción se aplicará cuando el plan tenga esta cantidad de sesiones o más.</span>
+              <span className="block mt-1 text-[10px] tracking-normal text-slate-500">La promoción se aplicará cuando el plan tenga esta cantidad de sesiones o más.</span>
             </label>
             <fieldset>
               <legend className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">Servicios donde aplica</legend>
@@ -221,7 +221,7 @@ export default function PromocionesPage() {
               </label>
               <label className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Mínimo de sesiones (opcional)
                 <input type="number" min="1" value={currentRule.sesiones_minimas ?? ''} onChange={e => setCurrentRule({ ...currentRule, sesiones_minimas: e.target.value ? Number(e.target.value) : null })} placeholder="Ej: 10" className="mt-2 w-full px-4 py-3 rounded-2xl bg-rose-50/50 text-sm font-bold text-rose-950 outline-none focus:ring-2 focus:ring-rose-200" />
-                <span className="block mt-1 text-[10px] normal-case tracking-normal text-slate-500">Se aplicará cuando el plan tenga esta cantidad o más.</span>
+                <span className="block mt-1 text-[10px] tracking-normal text-slate-500">Se aplicará cuando el plan tenga esta cantidad o más.</span>
               </label>
             </div>
             <fieldset>

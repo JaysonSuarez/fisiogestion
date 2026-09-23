@@ -39,11 +39,20 @@
 
 body {
   font-family: 'Plus Jakarta Sans', sans-serif;
+  text-transform: uppercase;
   font-size: 15px;
   color: var(--c-text-main);
   background: var(--c-bg-page);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+}
+
+body button,
+body input,
+body select,
+body textarea,
+body option {
+  text-transform: uppercase;
 }
 
 /* Typography Enhancements */
