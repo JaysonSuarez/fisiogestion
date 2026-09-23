@@ -118,8 +118,9 @@ self.addEventListener('notificationclick', (event) => {
   const urlToOpen = event.notification.data.url || '/';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      const targetUrl = new URL(urlToOpen, self.location.origin).href;
       for (const client of windowClients) {
-        if (client.url === urlToOpen && 'focus' in client) {
+        if (client.url === targetUrl && 'focus' in client) {
           return client.focus();
         }
       }

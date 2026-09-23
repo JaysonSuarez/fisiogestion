@@ -21,6 +21,7 @@ import {
   type EvaluacionInicialForm,
 } from '@/lib/evaluacion-inicial'
 import { generateEvaluacionInicialPDF } from '@/lib/generate-evaluacion-inicial-pdf'
+import { notifyPatientEvaluationReady } from '@/lib/notify-patient-evaluation'
 
 async function loadFirma(perfil: PerfilFisio) {
   if (!perfil.firma) return null
@@ -272,6 +273,7 @@ export default function EvaluacionInicialPage() {
     if (autosaveTimeoutRef.current) window.clearTimeout(autosaveTimeoutRef.current)
     setSaving(true)
     try {
+      const wasCompleted = evaluacion?.estado === 'completada'
       const now = new Date().toISOString()
       const { data, error } = await supabase
         .from('evaluaciones')
@@ -303,6 +305,7 @@ export default function EvaluacionInicialPage() {
       localStorage.removeItem(draftKey)
       dirtyRef.current = false
       setDraftStatus('saved')
+      if (!wasCompleted) await notifyPatientEvaluationReady(pacienteId, 'inicial')
     } catch (error) {
       console.error('No se pudo finalizar la evaluación inicial:', error)
       setDraftStatus('error')

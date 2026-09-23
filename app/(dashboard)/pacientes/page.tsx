@@ -27,6 +27,7 @@ export default function PacientesPage() {
   const [pacientes, setPacientes] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
+  const [provisioning, setProvisioning] = useState(false)
 
   async function loadPacientes() {
     // 1. Cargar desde caché (Offline First)
@@ -88,6 +89,20 @@ export default function PacientesPage() {
     }
   }
 
+  async function habilitarAccesosExistentes() {
+    setProvisioning(true)
+    try {
+      const response = await fetch('/api/patient/provision-existing', { method: 'POST' })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'No se pudieron habilitar los accesos.')
+      window.alert(`Accesos listos: ${result.created} cuentas nuevas, ${result.linked} cuentas vinculadas, ${result.refreshed} cuentas preparadas y ${result.alreadyReady} ya estaban listas. ${result.skipped} quedaron pendientes por revisar. La clave inicial es el teléfono registrado, sin espacios, y se pedirá cambiarla al entrar.`)
+    } catch (error: any) {
+      window.alert(error.message || 'No se pudieron habilitar los accesos.')
+    } finally {
+      setProvisioning(false)
+    }
+  }
+
   useEffect(() => {
     loadPacientes()
   }, [])
@@ -109,10 +124,15 @@ export default function PacientesPage() {
           <h2 className="font-display italic text-4xl mb-1 text-rose-950">Pacientes</h2>
           <p className="text-rose-400 font-medium text-xs uppercase tracking-widest">{pacientes.length} totales en tu sistema</p>
         </div>
-        <Link href="/pacientes/nuevo" className="p-4 bg-rose-600 text-white rounded-2xl shadow-xl shadow-rose-200 hover:scale-105 transition-all flex items-center gap-2">
-          <Plus size={20} />
-          <span className="hidden sm:inline font-black text-[10px] uppercase tracking-widest">Nuevo Paciente</span>
-        </Link>
+        <div className="flex gap-2">
+          {esDuena(fisioActiva) && <button onClick={habilitarAccesosExistentes} disabled={provisioning} className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-rose-700 disabled:opacity-50">
+            <span className="font-black text-[10px] uppercase tracking-widest">{provisioning ? 'Preparando…' : 'Habilitar app a existentes'}</span>
+          </button>}
+          <Link href="/pacientes/nuevo" className="p-4 bg-rose-600 text-white rounded-2xl shadow-xl shadow-rose-200 hover:scale-105 transition-all flex items-center gap-2">
+            <Plus size={20} />
+            <span className="hidden sm:inline font-black text-[10px] uppercase tracking-widest">Nuevo Paciente</span>
+          </Link>
+        </div>
       </header>
 
       <div className="space-y-6">

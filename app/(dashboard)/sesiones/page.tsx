@@ -232,7 +232,9 @@ export default function SesionesPage() {
           fisioterapeuta: c.fisioterapeuta || 'Liliana',
           // Reiniciar avisos para que el cron notifique con la fecha/hora nueva
           notificado_1h: false,
-          notificado_10m: false
+          notificado_10m: false,
+          paciente_notificado_1h: false,
+          paciente_notificado_15m: false
         }).eq('id', c.id)
       }
 

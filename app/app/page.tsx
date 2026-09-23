@@ -8,6 +8,7 @@ import { format, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Script from 'next/script'
 import { format12h } from '@/lib/utils'
+import InstallAppCard from '@/components/patient/InstallAppCard'
 
 export default function PatientHomePage() {
   const [perfil, setPerfil] = useState<any>(null)
@@ -80,6 +81,8 @@ export default function PatientHomePage() {
           <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
         </div>
       </div>
+
+      <InstallAppCard />
 
       {/* Promociones */}
       {promociones.length > 0 && (

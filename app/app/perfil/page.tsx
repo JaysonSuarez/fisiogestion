@@ -33,7 +33,7 @@ export default function PerfilPage() {
 
   const handleShare = async () => {
     if (!perfil) return
-    const text = `¡Agenda tu cita de fisioterapia con Liliana! Usa mi código de referido ${perfil.codigo_referido} al registrarte en la app. Descárgala aquí: ${window.location.origin}/app`
+    const text = `¡Agenda tu cita de fisioterapia con Liliana! Comparte este código con la clínica al crear tu ficha: ${perfil.codigo_referido}. Después podrás reservar desde la app: ${window.location.origin}/app`
     
     if (navigator.share) {
       try {
@@ -123,7 +123,7 @@ export default function PerfilPage() {
 
         <div className="mt-4 p-3 bg-rose-950/20 rounded-xl">
           <p className="text-[9px] text-white/80 font-medium leading-relaxed">
-            <strong className="font-bold text-white uppercase tracking-widest">Importante:</strong> Para recibir tu recompensa, la persona que invites debe registrarse usando tu código y <strong className="text-white">agendar su primera cita obligatoriamente desde esta aplicación</strong>.
+            <strong className="font-bold text-white uppercase tracking-widest">Importante:</strong> Para recibir tu recompensa, la persona que invites debe compartir tu código cuando la clínica cree su ficha y <strong className="text-white">agendar su primera cita desde esta aplicación</strong>.
           </p>
         </div>
       </div>

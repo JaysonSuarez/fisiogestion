@@ -1,13 +1,13 @@
 {
-  "name": "FisioGestión",
-  "short_name": "FisioGestión",
-  "description": "Sistema de gestión para pacientes y sesiones de fisioterapia.",
-  "start_url": "/",
+  "id": "/agendar-pwa",
+  "name": "Agenda FisioGestión",
+  "short_name": "Agenda Fisio",
+  "description": "Agenda y administra tus citas de fisioterapia.",
+  "start_url": "/agendar",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ec4899",
-  "gcm_sender_id": "103953800507",
   "icons": [
     {
       "src": "/logo.png",

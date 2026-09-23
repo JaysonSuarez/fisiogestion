@@ -23,6 +23,7 @@ export default function NuevoPacientePage() {
 
   const [fisioActiva, setFisioActiva] = useState<Fisioterapeuta>('Liliana')
   const [selectedFisio, setSelectedFisio] = useState<Fisioterapeuta>('Liliana')
+  const [accessInfo, setAccessInfo] = useState<{ username: string; initialPassword: string } | null>(null)
 
   useEffect(() => {
     getCachedUser().then((user) => {
@@ -41,6 +42,7 @@ export default function NuevoPacientePage() {
     const formData = new FormData(e.currentTarget)
     const nombre = formData.get('nombre') as string
     const telefono = formData.get('telefono') as string
+    const codigoReferido = formData.get('codigo_referido') as string
     const diagnostico = formData.get('diagnostico') as string
     const edad = parseInt(formData.get('edad') as string)
     const estado = formData.get('estado') as string
@@ -53,7 +55,7 @@ export default function NuevoPacientePage() {
     const sexo = formData.get('sexo') as string
 
     try {
-      const { error: insertError } = await supabase
+      const { data: createdPatient, error: insertError } = await supabase
         .from('pacientes')
         .insert([{ 
           nombre, 
@@ -67,20 +69,22 @@ export default function NuevoPacientePage() {
           fisioterapeuta: selectedFisio,
           traido_por_fisio: false
         }])
+        .select('id')
+        .single()
 
       if (insertError) throw insertError
 
-      setNotification({
-        isOpen: true,
-        type: 'success',
-        title: '¡Paciente Registrado!',
-        message: 'El nuevo paciente ha sido agregado exitosamente.'
+      const accessResponse = await fetch('/api/patient/provision', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: createdPatient.id, referralCode: codigoReferido }),
       })
-      
-      setTimeout(() => {
-        router.push('/pacientes')
-        router.refresh()
-      }, 2000)
+      const accessResult = await accessResponse.json()
+      if (!accessResponse.ok) {
+        setNotification({ isOpen: true, type: 'error', title: 'Paciente guardado; falta habilitar la app', message: accessResult.error || 'Verifica que tenga un teléfono válido y vuelve a intentar desde su perfil.' })
+        return
+      }
+
+      setAccessInfo({ username: accessResult.username, initialPassword: accessResult.initialPassword || telefono.replace(/\D/g, '') })
     } catch (err: any) {
       console.error('Error al crear paciente:', err)
       setNotification({
@@ -96,6 +100,15 @@ export default function NuevoPacientePage() {
 
   return (
     <div className="max-w-3xl mx-auto pb-12">
+      {accessInfo && <div className="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-950">
+        <h3 className="text-lg font-black">Paciente registrado y acceso listo</h3>
+        <p className="mt-1 text-sm">Comparte estos datos directamente con el paciente. Al entrar tendrá que crear una contraseña personal.</p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="rounded-2xl bg-white p-4"><div className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Usuario</div><div className="mt-1 text-lg font-black">{accessInfo.username}</div></div>
+          <div className="rounded-2xl bg-white p-4"><div className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Clave inicial</div><div className="mt-1 text-lg font-black">{accessInfo.initialPassword}</div></div>
+        </div>
+        <button onClick={() => { router.push('/pacientes'); router.refresh() }} className="mt-4 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white">Continuar</button>
+      </div>}
       <NotificationModal 
         isOpen={notification.isOpen}
         onClose={() => setNotification(prev => ({...prev, isOpen: false}))}
@@ -135,8 +148,13 @@ export default function NuevoPacientePage() {
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
                 Teléfono de contacto
               </label>
-              <input name="telefono" className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-slate-50 text-slate-800 font-bold" type="tel" placeholder="300 000 0000" />
+              <input name="telefono" className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-slate-50 text-slate-800 font-bold" type="tel" placeholder="300 000 0000" required />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Código de referido (opcional)</label>
+            <input name="codigo_referido" className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none bg-slate-50 text-slate-800 font-bold uppercase" type="text" placeholder="LILO-..." />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

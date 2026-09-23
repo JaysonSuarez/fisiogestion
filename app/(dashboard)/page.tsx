@@ -277,7 +277,9 @@ export default function DashboardPage() {
           estado: 'pendiente',
           // Reiniciar avisos para que el cron notifique con la hora nueva
           notificado_1h: false,
-          notificado_10m: false
+          notificado_10m: false,
+          paciente_notificado_1h: false,
+          paciente_notificado_15m: false
         })
         .eq('id', verificationCita.id)
       

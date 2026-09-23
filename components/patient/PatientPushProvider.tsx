@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { subscribeUser } from '@/lib/push-subscription'
 import { BellRing, X } from 'lucide-react'
+import { getCachedUser } from '@/lib/supabase'
 
 export default function PatientPushProvider() {
   const [showPrompt, setShowPrompt] = useState(false)
@@ -15,17 +16,18 @@ export default function PatientPushProvider() {
 
     // Verificar si ya se pidió el permiso
     const permission = Notification.permission
-    if (permission === 'default') {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let cancelled = false
+    getCachedUser().then(user => {
+      if (!user || permission !== 'default') return
       // Mostrar el pop-up después de 2 segundos de entrar a la app
-      const timer = setTimeout(() => {
-        setShowPrompt(true)
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
+      timer = setTimeout(() => { if (!cancelled) setShowPrompt(true) }, 2000)
+    })
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
   }, [])
 
   const handleActivar = async () => {
-    const success = await subscribeUser('paciente')
+      const success = await subscribeUser('paciente')
     if (success) {
       setShowPrompt(false)
     } else {

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase, getCachedUser } from '@/lib/supabase'
 import { generateEvaluacionPDF } from '@/lib/generate-evaluacion-pdf'
+import { notifyPatientEvaluationReady } from '@/lib/notify-patient-evaluation'
 import {
   ArrowLeft, Save, Loader2, FileText, User, Stethoscope,
   Activity, ClipboardList, Target, Lightbulb, Heart, Download,
@@ -364,6 +365,7 @@ export default function EvaluacionPage() {
     if (autosaveTimeoutRef.current) window.clearTimeout(autosaveTimeoutRef.current)
     setSaving(true)
     try {
+      const wasCompleted = evaluacion?.estado === 'completada'
       // Sync doc and sex to patient if they were added
       if (form.documento_identidad || form.sexo) {
         await supabase
@@ -404,6 +406,7 @@ export default function EvaluacionPage() {
       localStorage.removeItem(draftKey)
       dirtyRef.current = false
       setDraftStatus('saved')
+      if (!wasCompleted) await notifyPatientEvaluationReady(pacienteId, 'reevaluacion')
     } catch (err) {
       console.error(err)
     } finally {

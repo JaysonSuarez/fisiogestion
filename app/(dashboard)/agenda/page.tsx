@@ -237,6 +237,8 @@ export default function AgendaPage() {
           estado: 'pendiente',
           notificado_1h: false,
           notificado_10m: false,
+          paciente_notificado_1h: false,
+          paciente_notificado_15m: false,
         })
         .eq('id', selectedCita.id)
       if (error) throw error

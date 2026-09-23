@@ -29,6 +29,7 @@ type Step = 'plan' | 'fechas' | 'confirmar' | 'enviado'
 export default function PatientAgendarPage() {
   const [step, setStep] = useState<Step>('plan')
   const [isLoading, setIsLoading] = useState(false)
+  const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null)
   const [citasExistentes, setCitasExistentes] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
   const [perfil, setPerfil] = useState<any>(null)
@@ -68,9 +69,6 @@ export default function PatientAgendarPage() {
         const { data } = await supabase.from('patient_profiles').select('*').eq('id', user.id).single()
         setPerfil(data)
       }
-      const { data: citas } = await supabase.from('citas').select('fecha, hora_inicio').neq('estado', 'cancelada')
-      setCitasExistentes(citas || [])
-      
       const promoStr = localStorage.getItem('activePromo')
       if (promoStr) {
         try {
@@ -81,8 +79,30 @@ export default function PatientAgendarPage() {
     init()
   }, [])
 
+  useEffect(() => {
+    const from = format(weekStart, 'yyyy-MM-dd')
+    const to = format(addDays(weekStart, 7), 'yyyy-MM-dd')
+    fetch(`/api/patient/availability?from=${from}&to=${to}`, { cache: 'no-store' })
+      .then(async response => {
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'No pudimos consultar la agenda.')
+        setCitasExistentes(result.citas || [])
+      })
+      .catch(error => {
+        console.error('No se pudo consultar disponibilidad:', error)
+        setCitasExistentes([])
+      })
+  }, [weekStart])
+
   const isSlotRealmenteOcupado = (fecha: string, hora: string) => {
-    const isOcupado = citasExistentes.some(c => c.fecha === fecha && c.hora_inicio.split(':')[0] === hora.split(':')[0])
+    const [hour, minute] = hora.split(':').map(Number)
+    const slotStart = hour * 60 + minute
+    const isOcupado = citasExistentes.some(c => {
+      if (c.fecha !== fecha) return false
+      const [occupiedHour, occupiedMinute] = c.hora_inicio.slice(0, 5).split(':').map(Number)
+      const occupiedStart = occupiedHour * 60 + occupiedMinute
+      return slotStart < occupiedStart + (c.duracion_minutos || 60) && occupiedStart < slotStart + 60
+    })
     const date = new Date(fecha + 'T12:00:00')
     const isSun = date.getDay() === 0
     const isSat = date.getDay() === 6
@@ -162,7 +182,6 @@ export default function PatientAgendarPage() {
           plan: currentPlan,
           slots: slotsSeleccionados,
           motivo,
-          user_id: user.id,
           esDomicilio,
           usarSesionGratis: usarSesionGratis && !activePromo,
           usoDescuento: usoDescuento && !activePromo,
@@ -170,12 +189,11 @@ export default function PatientAgendarPage() {
         })
       })
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error)
-      }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
       
       localStorage.removeItem('activePromo')
+      setConfirmedTotal(data.total)
       setStep('enviado')
     } catch (err: any) {
       alert('Error: ' + err.message)
@@ -443,7 +461,7 @@ export default function PatientAgendarPage() {
             <div>
               <h2 className="font-black text-2xl text-rose-950 uppercase tracking-tighter">¡Cita Confirmada!</h2>
               <p className="text-sm text-rose-400 font-medium mt-2 leading-relaxed">
-                Tu cita ha sido agendada exitosamente en el calendario de Liliana.
+                Tu reserva quedó confirmada en la agenda. {confirmedTotal !== null && <>Total del paquete: <strong className="text-rose-700">{formatCOP(confirmedTotal)}</strong>.</>}
               </p>
             </div>
           </div>

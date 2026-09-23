@@ -2,16 +2,13 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
-import { Heart, Loader2, Mail, Lock, ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+import { Heart, Loader2, Phone, User } from 'lucide-react'
 
 export default function PatientLoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,12 +16,18 @@ export default function PatientLoginPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const identityResponse = await fetch('/api/patient/resolve-login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
       })
-
+      const identity = await identityResponse.json()
+      if (!identityResponse.ok) throw new Error(identity.error || 'Credenciales inválidas')
+      const { data, error } = await supabase.auth.setSession({ access_token: identity.access_token, refresh_token: identity.refresh_token })
       if (error) throw error
+      if (identity.must_change_password || data.user?.app_metadata?.must_change_password) {
+        window.location.href = '/app/cambiar-clave'
+        return
+      }
       window.location.href = '/app'
     } catch (err: any) {
       setError('Credenciales inválidas')
@@ -56,24 +59,26 @@ export default function PatientLoginPage() {
 
           <div className="space-y-4">
             <div className="relative group">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-300 group-focus-within:text-rose-500 transition-colors" size={20} />
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-300 group-focus-within:text-rose-500 transition-colors" size={20} />
               <input 
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Correo electrónico"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Tu primer nombre"
                 className="w-full pl-12 pr-4 py-4 bg-rose-50/50 border-2 border-transparent focus:border-rose-200 focus:bg-white rounded-3xl outline-none transition-all font-medium text-rose-950 shadow-inner"
                 required
               />
             </div>
 
             <div className="relative group">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-300 group-focus-within:text-rose-500 transition-colors" size={20} />
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-300 group-focus-within:text-rose-500 transition-colors" size={20} />
               <input 
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Contraseña"
+                placeholder="Tu contraseña inicial es tu teléfono"
                 className="w-full pl-12 pr-4 py-4 bg-rose-50/50 border-2 border-transparent focus:border-rose-200 focus:bg-white rounded-3xl outline-none transition-all font-medium text-rose-950 shadow-inner"
                 required
               />
@@ -90,9 +95,7 @@ export default function PatientLoginPage() {
               </div>
               <span className="text-xs font-bold text-rose-400 group-hover:text-rose-600 transition-colors">Recordar sesión</span>
             </label>
-            <Link href="/app/recuperar-password" className="text-xs font-bold text-rose-500 hover:text-rose-700 transition-colors">
-              ¿Olvidaste tu contraseña?
-            </Link>
+            <span className="text-right text-xs font-bold text-rose-500">¿Problemas para entrar? Comunícate con la clínica.</span>
           </div>
 
           <button 
@@ -104,10 +107,7 @@ export default function PatientLoginPage() {
           </button>
           
           <div className="mt-6 pt-6 border-t border-rose-100 text-center">
-            <p className="text-xs text-rose-400 font-medium mb-3">¿No tienes cuenta?</p>
-            <Link href="/app/registro" className="inline-flex items-center justify-center gap-2 w-full py-4 bg-rose-50 text-rose-600 rounded-3xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 transition-colors">
-              Crear cuenta <ChevronRight size={14} />
-            </Link>
+            <p className="text-xs text-rose-400 font-medium">Si eres paciente, tu acceso se habilita al registrarte en la clínica. Si no puedes entrar, comunícate con nosotros.</p>
           </div>
         </form>
       </div>
