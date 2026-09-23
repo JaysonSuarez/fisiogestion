@@ -4,9 +4,12 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Search, CheckCircle2, XCircle, Clock, Loader2, Ticket, Tag, ArrowLeft } from 'lucide-react'
 import { validarCupon as buscarCupon, reclamarCupon, type EstadoCupon, type ResultadoCupon } from '@/lib/cupones'
+import { SERVICIOS_CUPON } from '@/lib/descuentos'
 
 const STATUS_CONFIG: Record<EstadoCupon, { icon: typeof CheckCircle2; color: string; bg: string; border: string; label: string }> = {
   valido:        { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'CUPÓN VÁLIDO' },
+  no_aplica:     { icon: XCircle,      color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200', label: 'NO APLICA A ESTE SERVICIO' },
+  error_configuracion: { icon: XCircle, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', label: 'NO SE PUDO VALIDAR' },
   expirado:      { icon: Clock,        color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'CUPÓN EXPIRADO' },
   usado:         { icon: XCircle,      color: 'text-rose-600',    bg: 'bg-rose-50',     border: 'border-rose-200',    label: 'CUPÓN YA UTILIZADO' },
   no_encontrado: { icon: XCircle,      color: 'text-rose-600',    bg: 'bg-rose-50',     border: 'border-rose-200',    label: 'CUPÓN NO ENCONTRADO' },
@@ -116,7 +119,11 @@ export default function ValidarCuponPage() {
                   <Tag size={20} className="text-emerald-500 shrink-0" />
                   <div>
                     <div className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-0.5">Descuento + Beneficio</div>
-                    <div className="font-black text-rose-950 text-lg">Valoración Gratis · 10% OFF en planes</div>
+                    <div className="font-black text-rose-950 text-lg">
+                      {resultado.regla_configurada
+                        ? `${resultado.porcentaje_descuento}% OFF en ${resultado.servicios_aplicables?.length ? resultado.servicios_aplicables.map(id => SERVICIOS_CUPON.find(s => s.id === id)?.label || id).join(', ') : 'todos los servicios'}`
+                        : 'Valoración Gratis · 10% OFF en planes'}
+                    </div>
                   </div>
                 </div>
               )}

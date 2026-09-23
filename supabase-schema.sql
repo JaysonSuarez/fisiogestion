@@ -77,6 +77,19 @@ CREATE TABLE diezmos (
 );
 
 -- ============================================================
+-- REGLAS DE DESCUENTO POR CUPÓN
+-- ============================================================
+CREATE TABLE reglas_cupones (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  codigo_cupon TEXT NOT NULL UNIQUE,
+  porcentaje_descuento INTEGER NOT NULL DEFAULT 10 CHECK (porcentaje_descuento BETWEEN 0 AND 100),
+  servicios_aplicables TEXT[] NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX reglas_cupones_codigo_normalizado_idx
+  ON reglas_cupones (upper(trim(codigo_cupon)));
+
+-- ============================================================
 -- ROW LEVEL SECURITY (habilitar cuando uses Auth de Supabase)
 -- ============================================================
 -- ALTER TABLE pacientes ENABLE ROW LEVEL SECURITY;

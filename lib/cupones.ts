@@ -2,12 +2,12 @@ import { validarCuponAction, reclamarCuponAction, type EstadoCupon, type Resulta
 
 export type { EstadoCupon, ResultadoCupon }
 
-// Porcentaje de descuento del cupón en planes de tratamiento (la valoración es gratis).
-export const DESCUENTO_CUPON = 0.10
+// Porcentaje histórico usado para cupones que aún no tienen una regla en Fisiogestión.
+export const DESCUENTO_CUPON = 10
 
 // Consulta el cupón y determina su estado (sin modificarlo).
-export async function validarCupon(codigo: string): Promise<ResultadoCupon> {
-  return await validarCuponAction(codigo)
+export async function validarCupon(codigo: string, servicio = ''): Promise<ResultadoCupon> {
+  return await validarCuponAction(codigo, servicio)
 }
 
 // Marca el cupón como usado de forma atómica (solo si aún NO estaba usado).
@@ -17,8 +17,10 @@ export async function reclamarCupon(codigo: string): Promise<boolean> {
   return await reclamarCuponAction(codigo)
 }
 
-// Aplica la regla de descuento: la valoración queda gratis; los demás planes reciben 10%.
-export function aplicarDescuentoCupon(precio: number, esValoracion: boolean): number {
-  if (esValoracion) return 0
-  return Math.round(precio * (1 - DESCUENTO_CUPON))
+// Respeta las reglas configuradas y conserva el beneficio histórico en códigos no configurados.
+export function aplicarDescuentoCupon(precio: number, resultado: ResultadoCupon | null, esValoracion: boolean): number {
+  if (!resultado || resultado.estado !== 'valido') return precio
+  if (esValoracion && !resultado.regla_configurada) return 0
+  const porcentaje = resultado.porcentaje_descuento ?? DESCUENTO_CUPON
+  return Math.round(precio * (1 - porcentaje / 100))
 }

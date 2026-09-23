@@ -53,6 +53,11 @@ export default function PatientAgendarPage() {
     ? { ...planSeleccionado, sesiones: customSessionsCount, precio: getCustomPrice(customSessionsCount) }
     : planSeleccionado
 
+  const servicioActual = currentPlan?.id === 'personalizado' ? 'personalizado' : currentPlan?.id
+  const serviciosPromo = (activePromo?.servicios_aplicables || []) as string[]
+  const promoAplica = !!activePromo && (!serviciosPromo.length || (!!servicioActual && serviciosPromo.includes(servicioActual)))
+  const promoEfectiva = promoAplica ? activePromo : null
+
   const [weekStart, setWeekStart] = useState(() => {
     let d = startOfDay(new Date())
     if (d.getDay() === 0) d = addDays(d, 1)
@@ -153,15 +158,15 @@ export default function PatientAgendarPage() {
   const tieneDescuento = (perfil?.descuentos_disponibles || 0) > 0
   const tieneSesionGratis = (perfil?.sesiones_gratis || 0) > 0
 
-  const usoDescuento = tieneDescuento && !usarSesionGratis && !activePromo
+  const usoDescuento = tieneDescuento && !usarSesionGratis && !promoEfectiva
   
   let basePrice = currentPlan ? currentPlan.precio : 0
   let discountPrice = basePrice
 
-  if (activePromo && activePromo.porcentaje_descuento) {
-    const ratio = 1 - (activePromo.porcentaje_descuento / 100)
+  if (promoEfectiva && promoEfectiva.porcentaje_descuento) {
+    const ratio = 1 - (promoEfectiva.porcentaje_descuento / 100)
     discountPrice = Math.round(basePrice * ratio)
-  } else if (usarSesionGratis && currentPlan && !activePromo) {
+  } else if (usarSesionGratis && currentPlan && !promoEfectiva) {
     const precioPorSesion = Math.round(basePrice / currentPlan.sesiones)
     discountPrice = basePrice - precioPorSesion
   } else if (usoDescuento) {
@@ -183,9 +188,9 @@ export default function PatientAgendarPage() {
           slots: slotsSeleccionados,
           motivo,
           esDomicilio,
-          usarSesionGratis: usarSesionGratis && !activePromo,
-          usoDescuento: usoDescuento && !activePromo,
-          activePromo
+          usarSesionGratis: usarSesionGratis && !promoEfectiva,
+          usoDescuento: usoDescuento && !promoEfectiva,
+          activePromo: promoEfectiva
         })
       })
 
@@ -242,7 +247,7 @@ export default function PatientAgendarPage() {
               <div className="bg-purple-50 border-2 border-purple-200 p-4 rounded-2xl flex items-center justify-between mb-4">
                 <div>
                   <p className="text-sm font-black text-purple-900">Promo: {activePromo.titulo}</p>
-                  <p className="text-xs text-purple-700 font-bold">Descuento especial activado</p>
+                  <p className="text-xs text-purple-700 font-bold">{promoAplica ? 'Descuento especial activado' : 'Esta promoción no aplica a este servicio'}</p>
                 </div>
                 <button 
                   onClick={() => {
@@ -304,7 +309,7 @@ export default function PatientAgendarPage() {
               </label>
             </div>
 
-            {!activePromo && tieneSesionGratis && currentPlan && (
+            {!promoEfectiva && tieneSesionGratis && currentPlan && (
               <div className="bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-200 p-4 rounded-2xl flex items-center justify-between">
                 <div>
                   <p className="text-sm font-black text-amber-900">¡Tienes Sesiones Gratis!</p>
@@ -317,9 +322,9 @@ export default function PatientAgendarPage() {
               </div>
             )}
 
-            {(usoDescuento || usarSesionGratis || activePromo) && currentPlan && (
+            {(usoDescuento || usarSesionGratis || promoEfectiva) && currentPlan && (
               <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-2xl text-xs font-bold flex justify-between items-center">
-                <span>{activePromo ? `Promo: ${activePromo.titulo}` : usarSesionGratis ? 'Sesión Gratis Aplicada' : 'Aplicando 15% Dto Referido'}</span>
+                <span>{promoEfectiva ? `Promo: ${promoEfectiva.titulo}` : usarSesionGratis ? 'Sesión Gratis Aplicada' : 'Aplicando 15% Dto Referido'}</span>
                 <span className="font-black">{formatCOP(precioFinal)}</span>
               </div>
             )}
@@ -414,7 +419,7 @@ export default function PatientAgendarPage() {
               <div className="flex justify-between">
                 <span className="text-xs text-rose-400 font-bold">Valor Total</span>
                 <span className="text-sm font-black text-rose-600">
-                  {(usoDescuento || usarSesionGratis || activePromo) && <span className="line-through text-rose-300 text-xs mr-2">{formatCOP(currentPlan.precio + totalDomicilio)}</span>}
+                  {(usoDescuento || usarSesionGratis || promoEfectiva) && <span className="line-through text-rose-300 text-xs mr-2">{formatCOP(currentPlan.precio + totalDomicilio)}</span>}
                   {formatCOP(precioFinal)}
                 </span>
               </div>

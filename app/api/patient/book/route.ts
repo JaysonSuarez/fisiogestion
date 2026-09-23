@@ -107,10 +107,14 @@ export async function POST(req: Request) {
 
     let promo: any = null
     if (input.activePromo?.id) {
-      const { data } = await admin.from('promociones').select('id,titulo,porcentaje_descuento,fecha_inicio,fecha_fin')
+      const { data } = await admin.from('promociones').select('id,titulo,porcentaje_descuento,fecha_inicio,fecha_fin,servicios_aplicables')
         .eq('id', input.activePromo.id).eq('activa', true).maybeSingle()
       const today = todayInBogota()
-      if (data && (!data.fecha_inicio || data.fecha_inicio <= today) && (!data.fecha_fin || data.fecha_fin >= today)) promo = data
+      const servicioPromo = planId === 'personalizado' ? 'personalizado' : planId
+      const serviciosPromo = (data?.servicios_aplicables || []) as string[]
+      const aplicaAlPlan = !serviciosPromo.length || serviciosPromo.includes(servicioPromo)
+      if (data && aplicaAlPlan && (!data.fecha_inicio || data.fecha_inicio <= today) && (!data.fecha_fin || data.fecha_fin >= today)) promo = data
+      if (data && !aplicaAlPlan) return NextResponse.json({ error: 'Esta promoción no aplica al servicio seleccionado.' }, { status: 409 })
       if (!promo) return NextResponse.json({ error: 'Esta promoción ya no está disponible. Actualiza la página y revisa las promociones vigentes.' }, { status: 409 })
     }
 

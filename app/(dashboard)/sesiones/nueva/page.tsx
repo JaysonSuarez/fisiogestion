@@ -101,6 +101,7 @@ export default function NuevaSesionPage({
 
   const opcionesSesiones = [
     { value: 1, label: 'Valoración', type: 'valoracion' },
+    { value: 1, label: 'Descarga Muscular', type: 'descarga-muscular' },
     { value: 1, label: '1 Sesión', type: 'fisioterapia' },
     { value: 5, label: '5 Sesiones', type: 'fisioterapia' },
     { value: 10, label: '10 Sesiones', type: 'fisioterapia' },
@@ -137,12 +138,12 @@ export default function NuevaSesionPage({
   // ─── Cupón: cálculos derivados ──────────────────────────────────────────────
   const esValoracion = tipoPlan === 'valoracion'
   const cuponAplicado = cuponResultado?.estado === 'valido'
-  const valorConDescuento = cuponAplicado ? aplicarDescuentoCupon(valorTotal, esValoracion) : valorTotal
+  const valorConDescuento = cuponAplicado ? aplicarDescuentoCupon(valorTotal, cuponResultado, esValoracion) : valorTotal
 
   async function handleValidarCupon() {
     if (!cuponCodigo.trim() || validandoCupon) return
     setValidandoCupon(true)
-    const r = await validarCupon(cuponCodigo)
+    const r = await validarCupon(cuponCodigo, tipoPlan)
     setCuponResultado(r)
     setValidandoCupon(false)
   }
@@ -199,7 +200,7 @@ export default function NuevaSesionPage({
           setLoading(false)
           return
         }
-        notaCupon = ` [Cupón ${cuponResultado.codigo_cupon}: ${esValoracion ? 'Valoración gratis' : '10% desc.'}]`
+        notaCupon = ` [Cupón ${cuponResultado.codigo_cupon}: ${esValoracion && !cuponResultado.regla_configurada ? 'Valoración gratis' : `${cuponResultado.porcentaje_descuento ?? 10}% desc.`}]`
       }
 
       // Crear solo un registro de "Plan" (sesion) primero para obtener su ID
@@ -371,6 +372,7 @@ export default function NuevaSesionPage({
                   className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-white font-black text-rose-600 shadow-sm appearance-none"
                   value={isCustomSesiones ? 'custom' : `${cantidadSesiones}-${tipoPlan}`}
                   onChange={(e) => {
+                    setCuponResultado(null)
                     if (e.target.value === 'custom') {
                       setIsCustomSesiones(true)
                       handleCambioSesiones(15, 'fisioterapia')
@@ -430,7 +432,7 @@ export default function NuevaSesionPage({
                 <span className="text-4xl font-black text-white tracking-tighter relative z-10">{formatCOP(valorConDescuento)}</span>
                 {cuponAplicado && (
                   <span className="mt-2 text-[9px] font-black text-white bg-white/20 px-3 py-1 rounded-full uppercase tracking-widest relative z-10">
-                    {esValoracion ? 'Valoración gratis' : '10% de descuento'} · Cupón
+                    {esValoracion && !cuponResultado?.regla_configurada ? 'Valoración gratis' : `${cuponResultado?.porcentaje_descuento ?? 10}% de descuento`} · Cupón
                   </span>
                 )}
               </div>
@@ -462,14 +464,16 @@ export default function NuevaSesionPage({
                 {cuponResultado && cuponResultado.estado === 'valido' && (
                   <div className="flex items-center gap-2 text-emerald-600 text-xs font-black">
                     <CheckCircle size={14} />
-                    {esValoracion ? '¡Valoración gratis aplicada!' : '¡10% de descuento aplicado!'}
+                    {esValoracion && !cuponResultado.regla_configurada ? '¡Valoración gratis aplicada!' : `¡${cuponResultado.porcentaje_descuento ?? 10}% de descuento aplicado!`}
                     {cuponResultado.nombre && <span className="text-rose-300 font-bold">· {cuponResultado.nombre}</span>}
                   </div>
                 )}
                 {cuponResultado && cuponResultado.estado !== 'valido' && (
                   <div className="flex items-center gap-2 text-rose-500 text-xs font-black">
                     <XCircle size={14} />
-                    {cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
+                    {cuponResultado.estado === 'error_configuracion' ? 'No se pudieron verificar las condiciones del cupón. Intenta más tarde.' :
+                     cuponResultado.estado === 'no_aplica' ? 'Este cupón no aplica al servicio seleccionado.' :
+                     cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
                      cuponResultado.estado === 'expirado' ? 'Este cupón está vencido.' :
                      'Código no encontrado.'}
                   </div>

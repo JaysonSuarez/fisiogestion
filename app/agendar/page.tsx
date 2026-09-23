@@ -138,13 +138,14 @@ export default function AgendarPage() {
   const esValoracion = planSeleccionado?.id === 'evaluacion'
   const cuponAplicado = cuponResultado?.estado === 'valido'
   const precioFinal = planSeleccionado
-    ? (cuponAplicado ? aplicarDescuentoCupon(planSeleccionado.precio, esValoracion) : planSeleccionado.precio)
+    ? (cuponAplicado ? aplicarDescuentoCupon(planSeleccionado.precio, cuponResultado, esValoracion) : planSeleccionado.precio)
     : 0
 
   async function handleValidarCupon() {
     if (!cuponCodigo.trim() || validandoCupon) return
     setValidandoCupon(true)
-    const r = await validarCupon(cuponCodigo)
+    const servicio = planSeleccionado?.id === 'recovery-custom' ? 'personalizado' : planSeleccionado?.id || ''
+    const r = await validarCupon(cuponCodigo, servicio)
     setCuponResultado(r)
     setValidandoCupon(false)
   }
@@ -163,7 +164,7 @@ export default function AgendarPage() {
           setIsLoading(false)
           return
         }
-        notaCupon = ` [Cupón ${cuponResultado.codigo_cupon} aplicado: ${esValoracion ? 'Valoración gratis' : '10% desc.'}]`
+        notaCupon = ` [Cupón ${cuponResultado.codigo_cupon} aplicado: ${esValoracion && !cuponResultado.regla_configurada ? 'Valoración gratis' : `${cuponResultado.porcentaje_descuento ?? 10}% desc.`}]`
       }
 
       // 1. Guardar la solicitud en la base de datos
@@ -390,7 +391,8 @@ export default function AgendarPage() {
                   key={plan.id}
                   onClick={() => { 
                     setPlanSeleccionado(isCustom ? { ...plan, sesiones: currentSesiones, precio: currentPrecio } : plan); 
-                    setSlotsSeleccionados([]) 
+                    setSlotsSeleccionados([])
+                    setCuponResultado(null)
                   }}
                   className={`p-5 rounded-[24px] border-2 text-left transition-all active:scale-95 ${
                     plan.id === 'evaluacion' ? 'sm:col-span-2' : ''
@@ -478,13 +480,15 @@ export default function AgendarPage() {
               {cuponResultado && cuponResultado.estado === 'valido' && (
                 <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold">
                   <CheckCircle size={14} />
-                  {esValoracion ? '¡Valoración gratis aplicada!' : '¡10% de descuento aplicado!'}
+                  {esValoracion && !cuponResultado.regla_configurada ? '¡Valoración gratis aplicada!' : `¡${cuponResultado.porcentaje_descuento ?? 10}% de descuento aplicado!`}
                 </div>
               )}
               {cuponResultado && cuponResultado.estado !== 'valido' && (
                 <div className="flex items-center gap-2 text-rose-500 text-xs font-bold">
                   <XCircle size={14} />
-                  {cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
+                  {cuponResultado.estado === 'error_configuracion' ? 'No se pudieron verificar las condiciones del cupón. Intenta más tarde.' :
+                   cuponResultado.estado === 'no_aplica' ? 'Este cupón no aplica al servicio seleccionado.' :
+                   cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
                    cuponResultado.estado === 'expirado' ? 'Este cupón está vencido.' :
                    'Código no encontrado.'}
                 </div>
@@ -675,7 +679,7 @@ export default function AgendarPage() {
                 {cuponAplicado && (
                   <div className="flex justify-between">
                     <span className="text-xs text-emerald-500 font-bold flex items-center gap-1"><Tag size={11} /> Cupón {cuponResultado?.codigo_cupon}</span>
-                    <span className="text-xs font-black text-emerald-600">{esValoracion ? 'Valoración gratis' : '-10%'}</span>
+                    <span className="text-xs font-black text-emerald-600">{esValoracion && !cuponResultado?.regla_configurada ? 'Valoración gratis' : `-${cuponResultado?.porcentaje_descuento ?? 10}%`}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
