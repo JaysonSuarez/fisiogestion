@@ -90,6 +90,9 @@ CREATE TABLE reglas_cupones (
 CREATE UNIQUE INDEX reglas_cupones_codigo_normalizado_idx
   ON reglas_cupones (upper(trim(codigo_cupon)));
 
+ALTER TABLE public.promociones
+  ADD COLUMN IF NOT EXISTS sesiones_minimas INTEGER CHECK (sesiones_minimas IS NULL OR sesiones_minimas > 0);
+
 -- ============================================================
 -- ROW LEVEL SECURITY (habilitar cuando uses Auth de Supabase)
 -- ============================================================

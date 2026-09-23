@@ -33,7 +33,11 @@ export default function PromocionesPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    const promo = { ...currentPromo, servicios_aplicables: currentPromo.servicios_aplicables || [] }
+    const promo = {
+      ...currentPromo,
+      servicios_aplicables: currentPromo.servicios_aplicables || [],
+      sesiones_minimas: currentPromo.sesiones_minimas ? Number(currentPromo.sesiones_minimas) : null,
+    }
     const result = currentPromo.id
       ? await supabase.from('promociones').update(promo).eq('id', currentPromo.id)
       : await supabase.from('promociones').insert(promo)
@@ -97,7 +101,7 @@ export default function PromocionesPage() {
           <p className="text-rose-400 font-bold text-xs uppercase tracking-widest mt-1">Gestiona los descuentos de la app</p>
         </div>
         <button 
-          onClick={() => { setCurrentPromo({ titulo: '', descripcion: '', activa: true, servicios_aplicables: [] }); setIsEditing(true) }}
+          onClick={() => { setCurrentPromo({ titulo: '', descripcion: '', activa: true, servicios_aplicables: [], sesiones_minimas: null }); setIsEditing(true) }}
           className="bg-rose-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-200 flex items-center gap-2 hover:bg-rose-700 transition-colors"
         >
           <Plus size={16} /> Nueva Promo
@@ -136,6 +140,10 @@ export default function PromocionesPage() {
                 <span className="text-rose-400 font-black text-xl">%</span>
               </div>
             </div>
+            <label className="block text-[10px] font-black text-rose-400 uppercase tracking-widest">Mínimo de sesiones (opcional)
+              <input type="number" min="1" value={currentPromo.sesiones_minimas ?? ''} onChange={e => setCurrentPromo({ ...currentPromo, sesiones_minimas: e.target.value ? Number(e.target.value) : null })} placeholder="Ej: 10" className="mt-2 w-full px-4 py-3 rounded-2xl bg-rose-50/50 text-sm font-bold text-rose-950 outline-none focus:ring-2 focus:ring-rose-200" />
+              <span className="block mt-1 text-[10px] normal-case tracking-normal text-slate-500">La promoción se aplicará cuando el plan tenga esta cantidad de sesiones o más.</span>
+            </label>
             <fieldset>
               <legend className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">Servicios donde aplica</legend>
               <p className="text-xs text-slate-500 mb-3">Sin selección, la promoción aplica a todos los servicios.</p>
@@ -174,7 +182,7 @@ export default function PromocionesPage() {
             </div>
             <h3 className="font-black text-xl text-rose-950 tracking-tighter mb-1">{promo.titulo}</h3>
             <p className="text-sm text-rose-400 font-medium mb-4">{promo.descripcion}</p>
-            <p className="text-xs text-slate-500 mb-4">Aplica a: {(promo.servicios_aplicables || []).length ? promo.servicios_aplicables.map((id: string) => SERVICIOS_CUPON.find(s => s.id === id)?.label || id).join(', ') : 'Todos los servicios'}</p>
+            <p className="text-xs text-slate-500 mb-4">Aplica a: {(promo.servicios_aplicables || []).length ? promo.servicios_aplicables.map((id: string) => SERVICIOS_CUPON.find(s => s.id === id)?.label || id).join(', ') : 'Todos los servicios'}{promo.sesiones_minimas ? ` · Desde ${promo.sesiones_minimas} sesiones` : ''}</p>
             {promo.porcentaje_descuento && (
               <div className="flex items-center gap-2">
                 <span className="font-black text-xl text-rose-600">{promo.porcentaje_descuento}% DTO</span>

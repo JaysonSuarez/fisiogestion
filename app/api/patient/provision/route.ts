@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       email_confirm: true,
       password: digits,
       user_metadata: { role: 'patient' },
-      app_metadata: { role: 'patient', must_change_password: true },
+      app_metadata: { role: 'patient', must_change_password: false },
     })
     if (authError || !auth.user) throw authError || new Error('No se pudo crear el acceso del paciente.')
 

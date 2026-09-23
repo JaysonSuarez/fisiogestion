@@ -31,7 +31,6 @@ export async function POST(req: Request) {
         return NextResponse.json({
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
-          must_change_password: data.user?.app_metadata?.must_change_password === true,
         })
       }
     }

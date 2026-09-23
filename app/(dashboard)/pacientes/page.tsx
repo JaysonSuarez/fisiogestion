@@ -105,7 +105,7 @@ export default function PacientesPage() {
       const response = await fetch('/api/patient/provision-existing', { method: 'POST' })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'No se pudieron habilitar los accesos.')
-      window.alert(`Accesos listos: ${result.created} cuentas nuevas, ${result.linked} cuentas vinculadas, ${result.refreshed} cuentas preparadas y ${result.alreadyReady} ya estaban listas. ${result.skipped} quedaron pendientes por revisar. La clave inicial es el teléfono registrado, sin espacios, y se pedirá cambiarla al entrar.`)
+      window.alert(`Accesos listos: ${result.created} cuentas nuevas, ${result.linked} cuentas vinculadas, ${result.refreshed} cuentas preparadas y ${result.alreadyReady} ya estaban listas. ${result.skipped} quedaron pendientes por revisar. La clave inicial es el teléfono registrado, sin espacios.`)
     } catch (error: any) {
       window.alert(error.message || 'No se pudieron habilitar los accesos.')
     } finally {

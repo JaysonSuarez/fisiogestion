@@ -108,7 +108,7 @@ export default function PatientHomePage() {
                 </div>
                 <h3 className="font-black text-lg text-rose-950 leading-tight mb-2">{promo.titulo}</h3>
                 <p className="text-xs text-rose-400 font-medium mb-4 line-clamp-2">{promo.descripcion}</p>
-                <p className="text-[10px] text-slate-500 font-bold">Aplica a: {(promo.servicios_aplicables || []).length ? promo.servicios_aplicables.map((id: string) => SERVICIOS_CUPON.find(s => s.id === id)?.label || id).join(', ') : 'Todos los servicios'}</p>
+                <p className="text-[10px] text-slate-500 font-bold">Aplica a: {(promo.servicios_aplicables || []).length ? promo.servicios_aplicables.map((id: string) => SERVICIOS_CUPON.find(s => s.id === id)?.label || id).join(', ') : 'Todos los servicios'}{promo.sesiones_minimas ? ` · Desde ${promo.sesiones_minimas} sesiones` : ''}</p>
                 {promo.porcentaje_descuento && (
                   <div className="flex items-end gap-2">
                     <span className="font-black text-xl text-rose-600">{promo.porcentaje_descuento}% DTO</span>

@@ -22,12 +22,8 @@ export default function PatientLoginPage() {
       })
       const identity = await identityResponse.json()
       if (!identityResponse.ok) throw new Error(identity.error || 'Credenciales inválidas')
-      const { data, error } = await supabase.auth.setSession({ access_token: identity.access_token, refresh_token: identity.refresh_token })
-      if (error) throw error
-      if (identity.must_change_password || data.user?.app_metadata?.must_change_password) {
-        window.location.href = '/app/cambiar-clave'
-        return
-      }
+      const { error: sessionError } = await supabase.auth.setSession({ access_token: identity.access_token, refresh_token: identity.refresh_token })
+      if (sessionError) throw sessionError
       window.location.href = '/app'
     } catch (err: any) {
       setError('Credenciales inválidas')

@@ -44,7 +44,7 @@ export async function POST() {
         if (existing.cuenta_preparada) { alreadyReady++; continue }
         const { error } = await admin.auth.admin.updateUserById(existing.id, {
           password: normalizedPhone,
-          app_metadata: { role: 'patient', must_change_password: true },
+          app_metadata: { role: 'patient', must_change_password: false },
         })
         if (error) { console.error(`No se pudo preparar el acceso de ${patient.id}:`, error); skipped++; continue }
         const { error: profileUpdateError } = await admin.from('patient_profiles').update({ cuenta_preparada: true }).eq('id', existing.id)
@@ -63,7 +63,7 @@ export async function POST() {
       if (legacy) {
         const { error: authError } = await admin.auth.admin.updateUserById(legacy.id, {
           password: normalizedPhone,
-          app_metadata: { role: 'patient', must_change_password: true },
+          app_metadata: { role: 'patient', must_change_password: false },
         })
         if (authError) { console.error(`No se pudo activar la cuenta de ${patient.id}:`, authError); skipped++; continue }
         const { error } = await admin.from('patient_profiles').update({ paciente_id: patient.id, cuenta_preparada: true }).eq('id', legacy.id)
@@ -78,7 +78,7 @@ export async function POST() {
         email_confirm: true,
         password: normalizedPhone,
         user_metadata: { role: 'patient' },
-        app_metadata: { role: 'patient', must_change_password: true },
+        app_metadata: { role: 'patient', must_change_password: false },
       })
       if (authError || !auth.user) {
         console.error(`No se pudo crear el acceso de ${patient.id}:`, authError)

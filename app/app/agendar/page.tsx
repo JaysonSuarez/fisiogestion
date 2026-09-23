@@ -58,7 +58,10 @@ export default function PatientAgendarPage() {
 
   const servicioActual = currentPlan?.id === 'personalizado' ? 'personalizado' : currentPlan?.id
   const serviciosPromo = (activePromo?.servicios_aplicables || []) as string[]
-  const promoAplica = !!activePromo && (!serviciosPromo.length || (!!servicioActual && serviciosPromo.includes(servicioActual)))
+  const promoAplica = !!activePromo &&
+    (!serviciosPromo.length || (!!servicioActual && serviciosPromo.includes(servicioActual))) &&
+    (!activePromo.sesiones_minimas || (!!currentPlan && currentPlan.sesiones >= activePromo.sesiones_minimas))
+  const promoServicioAplica = !serviciosPromo.length || (!!servicioActual && serviciosPromo.includes(servicioActual))
   const promoEfectiva = promoAplica ? activePromo : null
 
   const [weekStart, setWeekStart] = useState(() => {
@@ -284,7 +287,7 @@ export default function PatientAgendarPage() {
               <div className="bg-purple-50 border-2 border-purple-200 p-4 rounded-2xl flex items-center justify-between mb-4">
                 <div>
                   <p className="text-sm font-black text-purple-900">Promo: {activePromo.titulo}</p>
-                  <p className="text-xs text-purple-700 font-bold">{promoAplica ? 'Descuento especial activado' : 'Esta promoción no aplica a este servicio'}</p>
+                  <p className="text-xs text-purple-700 font-bold">{promoAplica ? 'Descuento especial activado' : !promoServicioAplica ? 'Esta promoción no aplica a este servicio' : `Esta promoción requiere ${activePromo.sesiones_minimas} sesiones o más`}</p>
                 </div>
                 <button 
                   onClick={() => {

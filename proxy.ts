@@ -72,13 +72,7 @@ export async function proxy(request: NextRequest) {
     // Redirect to patient app home if authenticated and trying to access patient login/registration
     if (user && isPatientLoginOrRegistro) {
       const url = request.nextUrl.clone()
-      url.pathname = user.app_metadata?.must_change_password ? '/app/cambiar-clave' : '/app'
-      return NextResponse.redirect(url)
-    }
-
-    if (user?.app_metadata?.must_change_password && !path.startsWith('/app/cambiar-clave')) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/app/cambiar-clave'
+      url.pathname = '/app'
       return NextResponse.redirect(url)
     }
   } else {

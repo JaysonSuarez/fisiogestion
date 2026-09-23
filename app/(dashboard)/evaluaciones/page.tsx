@@ -108,9 +108,9 @@ export default function EvaluacionesIndexPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <div className="grid min-w-0 grid-cols-1 lg:grid-cols-3 gap-10">
         {/* Left Column: Create New / Select Patient */}
-        <div className="lg:col-span-1 space-y-8">
+        <div className="min-w-0 lg:col-span-1 space-y-8">
           <div className="bg-white/70 backdrop-blur-md rounded-[40px] p-8 shadow-xl shadow-rose-100/20 border border-rose-50 relative overflow-hidden">
             <div className="relative z-10">
               <h3 className="text-xs font-black text-rose-950 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
@@ -163,7 +163,7 @@ export default function EvaluacionesIndexPage() {
         </div>
 
         {/* Right Column: Recent Evaluations */}
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <div className="bg-white/80 backdrop-blur-md rounded-[40px] p-8 sm:p-10 shadow-xl shadow-rose-100/20 border border-rose-50">
             <h3 className="text-xs font-black text-rose-400 uppercase tracking-[0.2em] mb-8">
               Evaluaciones Recientes
@@ -179,10 +179,10 @@ export default function EvaluacionesIndexPage() {
                 evaluaciones.map(ev => (
                   <div
                     key={ev.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-[32px] border border-rose-50 hover:border-rose-200 hover:bg-white hover:shadow-xl hover:shadow-rose-100/30 transition-all bg-white/50 group"
+                    className="flex min-w-0 flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-[32px] border border-rose-50 hover:border-rose-200 hover:bg-white hover:shadow-xl hover:shadow-rose-100/30 transition-all bg-white/50 group"
                   >
                     <div 
-                      className="flex items-center gap-5 flex-1 cursor-pointer"
+                      className="flex min-w-0 flex-1 items-center gap-5 cursor-pointer"
                       onClick={() => router.push(routeFor(ev))}
                     >
                       <div className="w-14 h-14 bg-rose-950 text-rose-100 rounded-2xl flex items-center justify-center group-hover:bg-rose-600 group-hover:text-white transition-all shrink-0 shadow-lg">
@@ -190,17 +190,18 @@ export default function EvaluacionesIndexPage() {
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-black text-rose-950 truncate uppercase tracking-tight text-lg">{ev.pacientes?.nombre || 'Paciente Desconocido'}</h4>
-                        <p className="text-[10px] text-rose-300 font-black uppercase tracking-widest mt-1 flex flex-wrap items-center gap-3">
-                          <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-600">{ev.tipo === 'inicial' ? 'Evaluación inicial' : 'Re-evaluación'}</span>
-                          {ev.estado === 'borrador' && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-600">Borrador</span>}
-                          <span className="text-rose-500">{new Date(ev.fecha_valoracion + 'T12:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}</span>
+                        <div className="mt-2 min-w-0 space-y-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2 text-[10px] text-rose-300 font-black uppercase tracking-widest">
+                            <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-600">{ev.tipo === 'inicial' ? 'Evaluación inicial' : 'Re-evaluación'}</span>
+                            {ev.estado === 'borrador' && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-600">Borrador</span>}
+                            <span className="text-rose-500">{new Date(ev.fecha_valoracion + 'T12:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}</span>
+                          </div>
                           {ev.motivo_consulta && (
-                            <>
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-100"></span>
-                              <span className="truncate italic font-medium">{ev.motivo_consulta}</span>
-                            </>
+                            <p className="min-w-0 max-w-full break-words text-xs leading-relaxed text-slate-500 italic line-clamp-2">
+                              {ev.motivo_consulta}
+                            </p>
                           )}
-                        </p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 border-t sm:border-t-0 pt-4 sm:pt-0 border-rose-50">

@@ -107,14 +107,16 @@ export async function POST(req: Request) {
 
     let promo: any = null
     if (input.activePromo?.id) {
-      const { data } = await admin.from('promociones').select('id,titulo,porcentaje_descuento,fecha_inicio,fecha_fin,servicios_aplicables')
+      const { data } = await admin.from('promociones').select('id,titulo,porcentaje_descuento,fecha_inicio,fecha_fin,servicios_aplicables,sesiones_minimas')
         .eq('id', input.activePromo.id).eq('activa', true).maybeSingle()
       const today = todayInBogota()
       const servicioPromo = planId === 'personalizado' ? 'personalizado' : planId
       const serviciosPromo = (data?.servicios_aplicables || []) as string[]
       const aplicaAlPlan = !serviciosPromo.length || serviciosPromo.includes(servicioPromo)
-      if (data && aplicaAlPlan && (!data.fecha_inicio || data.fecha_inicio <= today) && (!data.fecha_fin || data.fecha_fin >= today)) promo = data
+      const sesionesMinimasCumplidas = !data?.sesiones_minimas || plan.sesiones >= data.sesiones_minimas
+      if (data && aplicaAlPlan && sesionesMinimasCumplidas && (!data.fecha_inicio || data.fecha_inicio <= today) && (!data.fecha_fin || data.fecha_fin >= today)) promo = data
       if (data && !aplicaAlPlan) return NextResponse.json({ error: 'Esta promoción no aplica al servicio seleccionado.' }, { status: 409 })
+      if (data && !sesionesMinimasCumplidas) return NextResponse.json({ error: `Esta promoción requiere un plan de ${data.sesiones_minimas} sesiones o más.` }, { status: 409 })
       if (!promo) return NextResponse.json({ error: 'Esta promoción ya no está disponible. Actualiza la página y revisa las promociones vigentes.' }, { status: 409 })
     }
 
@@ -145,7 +147,9 @@ export async function POST(req: Request) {
       fecha: orderedSlots[0].fecha,
       duracion_minutos: plan.sesiones * 60,
       valor: total,
-      metodo_pago: 'pendiente',
+      // Aún no se registra un método hasta que la clínica reciba el pago.
+      // `pendiente` corresponde al estado_pago y no es un método permitido.
+      metodo_pago: null,
       estado_pago: 'pendiente',
       nota_clinica: input.motivo || null,
     }).select('id').single()
