@@ -120,7 +120,10 @@ export async function POST(req: Request) {
       if (!promo) return NextResponse.json({ error: 'Esta promoción ya no está disponible. Actualiza la página y revisa las promociones vigentes.' }, { status: 409 })
     }
 
-    const useFreeDischarge = input.usarDescargaGratis === true && planId === 'descarga-muscular' && !promo && (profile.descargas_gratis_disponibles || 0) > 0
+    if (input.usarDescargaGratis === true && (planId !== 'descarga-muscular' || promo || (profile.descargas_gratis_disponibles || 0) < 1)) {
+      return NextResponse.json({ error: 'La recompensa requiere una descarga muscular y debe estar disponible en tu perfil.' }, { status: 409 })
+    }
+    const useFreeDischarge = input.usarDescargaGratis === true
     const useFree = !useFreeDischarge && input.usarSesionGratis === true && !promo && (profile.sesiones_gratis || 0) > 0
     const useReferral = !promo && !useFree && !useFreeDischarge && (profile.descuentos_disponibles || 0) > 0
     const requestedDiscount = promo ? Number(promo.porcentaje_descuento || 0) : (useReferral ? 15 : 0)
