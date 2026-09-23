@@ -8,6 +8,7 @@ import { ClipboardPlus, ArrowLeft, User, Calendar, Package, DollarSign, Wallet, 
 import { addDays, isSunday, getDay } from 'date-fns'
 import NotificationModal from '@/components/ui/NotificationModal'
 import { validarCupon, reclamarCupon, aplicarDescuentoCupon, type ResultadoCupon } from '@/lib/cupones'
+import { notifyFisioPush } from '@/lib/push-notifications'
 import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
 
@@ -119,6 +120,7 @@ export default function NuevaSesionPage({
   const handleCambioSesiones = (val: number, type: string) => {
     setCantidadSesiones(val)
     setTipoPlan(type)
+    setCuponResultado(null)
     const minPrice = getMinPrice(val, type)
     setValorPorSesion(minPrice)
   }
@@ -143,7 +145,8 @@ export default function NuevaSesionPage({
   async function handleValidarCupon() {
     if (!cuponCodigo.trim() || validandoCupon) return
     setValidandoCupon(true)
-    const r = await validarCupon(cuponCodigo, tipoPlan)
+    const servicio = isCustomSesiones ? 'personalizado' : tipoPlan
+    const r = await validarCupon(cuponCodigo, servicio, cantidadSesiones)
     setCuponResultado(r)
     setValidandoCupon(false)
   }
@@ -264,7 +267,17 @@ export default function NuevaSesionPage({
         }
       }
 
-      await supabase.from('citas').insert(citasToInsert)
+      const { error: citasError } = await supabase.from('citas').insert(citasToInsert)
+      if (citasError) throw citasError
+
+      const pacienteNombre = pacientes.find(p => p.id === pacienteId)?.nombre || 'un paciente'
+      const primeraCita = citasToInsert[0]
+      await notifyFisioPush({
+        targetFisio: activeFisio,
+        title: 'Te asignaron un nuevo horario',
+        body: `${pacienteNombre}: ${primeraCita.fecha} a las ${primeraCita.hora_inicio}. ${cantidadSesiones} sesión(es).`,
+        url: '/agenda',
+      })
 
       setNotification({
         isOpen: true,
@@ -472,7 +485,7 @@ export default function NuevaSesionPage({
                   <div className="flex items-center gap-2 text-rose-500 text-xs font-black">
                     <XCircle size={14} />
                     {cuponResultado.estado === 'error_configuracion' ? 'No se pudieron verificar las condiciones del cupón. Intenta más tarde.' :
-                     cuponResultado.estado === 'no_aplica' ? 'Este cupón no aplica al servicio seleccionado.' :
+                     cuponResultado.estado === 'no_aplica' ? 'Este cupón no aplica al servicio o cantidad de sesiones seleccionados.' :
                      cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
                      cuponResultado.estado === 'expirado' ? 'Este cupón está vencido.' :
                      'Código no encontrado.'}

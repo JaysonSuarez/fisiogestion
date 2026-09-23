@@ -65,6 +65,7 @@ export default function PromocionesPage() {
       codigo_cupon: String(currentRule.codigo_cupon || '').trim().toUpperCase(),
       porcentaje_descuento: Number(currentRule.porcentaje_descuento),
       servicios_aplicables: currentRule.servicios_aplicables || [],
+      sesiones_minimas: currentRule.sesiones_minimas ? Number(currentRule.sesiones_minimas) : null,
     }
     const query = currentRule.id
       ? supabase.from('reglas_cupones').update(rule).eq('id', currentRule.id)
@@ -190,7 +191,7 @@ export default function PromocionesPage() {
             <p className="text-rose-400 font-bold text-xs mt-1">Define el descuento y los servicios válidos para cada código.</p>
           </div>
           <button
-            onClick={() => { setRuleError(''); setCurrentRule({ codigo_cupon: '', porcentaje_descuento: 10, servicios_aplicables: [] }) }}
+            onClick={() => { setRuleError(''); setCurrentRule({ codigo_cupon: '', porcentaje_descuento: 10, servicios_aplicables: [], sesiones_minimas: null }) }}
             className="bg-rose-950 text-white px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
           ><Plus size={15} /> Nueva regla</button>
         </div>
@@ -209,6 +210,10 @@ export default function PromocionesPage() {
                   <input required type="number" min="0" max="100" value={currentRule.porcentaje_descuento} onChange={e => setCurrentRule({ ...currentRule, porcentaje_descuento: Number(e.target.value) })} className="w-full px-4 py-3 rounded-2xl bg-rose-50/50 text-sm font-bold text-rose-950 outline-none focus:ring-2 focus:ring-rose-200" />
                   <span className="font-black text-rose-400">%</span>
                 </div>
+              </label>
+              <label className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Mínimo de sesiones (opcional)
+                <input type="number" min="1" value={currentRule.sesiones_minimas ?? ''} onChange={e => setCurrentRule({ ...currentRule, sesiones_minimas: e.target.value ? Number(e.target.value) : null })} placeholder="Ej: 10" className="mt-2 w-full px-4 py-3 rounded-2xl bg-rose-50/50 text-sm font-bold text-rose-950 outline-none focus:ring-2 focus:ring-rose-200" />
+                <span className="block mt-1 text-[10px] normal-case tracking-normal text-slate-500">Se aplicará cuando el plan tenga esta cantidad o más.</span>
               </label>
             </div>
             <fieldset>
@@ -235,8 +240,8 @@ export default function PromocionesPage() {
           {reglasCupon.map(regla => {
             const nombres = (regla.servicios_aplicables || []).map((id: string) => SERVICIOS_CUPON.find(s => s.id === id)?.label || id)
             return <article key={regla.id} className="bg-white rounded-[24px] p-5 border border-rose-100 shadow-sm flex justify-between gap-4">
-              <div><h3 className="font-black text-rose-950 tracking-wide">{regla.codigo_cupon}</h3><p className="text-rose-600 font-black mt-1">{regla.porcentaje_descuento}% de descuento</p><p className="text-xs text-slate-500 mt-2">Aplica a: {nombres.length ? nombres.join(', ') : 'Todos los servicios'}</p></div>
-              <div className="flex gap-2 shrink-0"><button aria-label="Editar regla" onClick={() => setCurrentRule({ ...regla, servicios_aplicables: regla.servicios_aplicables || [] })} className="p-2 text-rose-400 bg-rose-50 rounded-xl"><Edit2 size={17} /></button><button aria-label="Eliminar regla" onClick={() => handleDeleteRule(regla.id)} className="p-2 text-rose-500 bg-rose-50 rounded-xl"><Trash2 size={17} /></button></div>
+              <div><h3 className="font-black text-rose-950 tracking-wide">{regla.codigo_cupon}</h3><p className="text-rose-600 font-black mt-1">{regla.porcentaje_descuento}% de descuento</p><p className="text-xs text-slate-500 mt-2">Aplica a: {nombres.length ? nombres.join(', ') : 'Todos los servicios'}{regla.sesiones_minimas ? ` · Desde ${regla.sesiones_minimas} sesiones` : ''}</p></div>
+              <div className="flex gap-2 shrink-0"><button aria-label="Editar regla" onClick={() => setCurrentRule({ ...regla, servicios_aplicables: regla.servicios_aplicables || [], sesiones_minimas: regla.sesiones_minimas ?? null })} className="p-2 text-rose-400 bg-rose-50 rounded-xl"><Edit2 size={17} /></button><button aria-label="Eliminar regla" onClick={() => handleDeleteRule(regla.id)} className="p-2 text-rose-500 bg-rose-50 rounded-xl"><Trash2 size={17} /></button></div>
             </article>
           })}
         </div> : <div className="rounded-[24px] border border-dashed border-rose-200 p-8 text-center text-sm font-medium text-rose-400">Aún no hay condiciones para cupones. Los códigos sin regla usan el descuento estándar actual.</div>}

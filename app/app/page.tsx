@@ -10,6 +10,7 @@ import Script from 'next/script'
 import { format12h } from '@/lib/utils'
 import InstallAppCard from '@/components/patient/InstallAppCard'
 import { SERVICIOS_CUPON } from '@/lib/descuentos'
+import { PatientNotificationCard } from '@/components/patient/PatientPushProvider'
 
 export default function PatientHomePage() {
   const [perfil, setPerfil] = useState<any>(null)
@@ -84,6 +85,7 @@ export default function PatientHomePage() {
       </div>
 
       <InstallAppCard />
+      <PatientNotificationCard />
 
       {/* Promociones */}
       {promociones.length > 0 && (

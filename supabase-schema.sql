@@ -84,6 +84,7 @@ CREATE TABLE reglas_cupones (
   codigo_cupon TEXT NOT NULL UNIQUE,
   porcentaje_descuento INTEGER NOT NULL DEFAULT 10 CHECK (porcentaje_descuento BETWEEN 0 AND 100),
   servicios_aplicables TEXT[] NOT NULL DEFAULT '{}',
+  sesiones_minimas INTEGER CHECK (sesiones_minimas IS NULL OR sesiones_minimas > 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX reglas_cupones_codigo_normalizado_idx

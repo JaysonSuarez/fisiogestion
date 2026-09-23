@@ -6,6 +6,7 @@ import { supabase, getCachedUser } from '@/lib/supabase'
 import { ClipboardPlus, Activity, CheckCircle, Clock, AlertCircle, Loader2, Sparkles, Edit3, Plus, Minus, X, Save, Trash2, Flower2 } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
 import ConfirmModal from '@/components/ui/ConfirmModal'
+import { notifyFisioPush } from '@/lib/push-notifications'
 
 import { formatCOP, getIniciales, getMesesDisponibles, formatMes, getCurrentMonthStr, getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
@@ -225,7 +226,7 @@ export default function SesionesPage() {
 
       const toUpdate = localCitas.filter(c => !c.isNew)
       for (const c of toUpdate) {
-        await supabase.from('citas').update({
+        const { error: citaUpdateError } = await supabase.from('citas').update({
           fecha: c.fecha,
           hora_inicio: c.hora_inicio,
           estado: c.estado,
@@ -236,6 +237,7 @@ export default function SesionesPage() {
           paciente_notificado_1h: false,
           paciente_notificado_15m: false
         }).eq('id', c.id)
+        if (citaUpdateError) throw citaUpdateError
       }
 
       const toInsert = localCitas.filter(c => c.isNew).map(c => ({
@@ -251,6 +253,23 @@ export default function SesionesPage() {
       if (toInsert.length > 0) {
         const { error: insError } = await supabase.from('citas').insert(toInsert)
         if (insError) throw insError
+      }
+
+      const originalById = new Map(selectedPlan.citas.map((c: any) => [c.id, c]))
+      const changedAssignments = localCitas.filter((c: any) => {
+        const original: any = c.isNew ? null : originalById.get(c.id)
+        return c.isNew || (original && (
+          (original.fisioterapeuta || 'Liliana') !== (c.fisioterapeuta || 'Liliana') ||
+          original.fecha !== c.fecha || String(original.hora_inicio).slice(0, 5) !== String(c.hora_inicio).slice(0, 5)
+        ))
+      })
+      for (const cita of changedAssignments) {
+        await notifyFisioPush({
+          targetFisio: (cita.fisioterapeuta || 'Liliana') as Fisioterapeuta,
+          title: cita.isNew ? 'Te asignaron un horario' : 'Actualización de tu horario',
+          body: `${selectedPlan.pacientes?.nombre || 'Un paciente'}: ${cita.fecha} a las ${String(cita.hora_inicio).slice(0, 5)}.`,
+          url: '/agenda',
+        })
       }
 
       setNotification({

@@ -6,6 +6,7 @@ import { Bell, X, Check, Calendar, User, Phone, Stethoscope, Loader2, Heart, Che
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import NotificationModal from '@/components/ui/NotificationModal'
+import { notifyFisioPush } from '@/lib/push-notifications'
 
 import { formatCOP, format12h, getFisioDeEmail, esDuena } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
@@ -99,6 +100,14 @@ export default function SolicitudesWidget() {
 
       const { error: cErr } = await supabase.from('citas').insert(citas)
       if (cErr) throw cErr
+
+      const primeraCita = sorted[0]
+      await notifyFisioPush({
+        targetFisio: fisioActiva,
+        title: 'Te asignaron un nuevo paciente',
+        body: `${solicitud.nombre} ${solicitud.apellido}: ${primeraCita?.fecha || 'horario pendiente'}${primeraCita?.hora ? ` a las ${primeraCita.hora}` : ''}.`,
+        url: '/agenda',
+      })
 
       // 5. Marcar solicitud como aceptada
       await supabase.from('solicitudes_cita').update({ estado: 'aceptada' }).eq('id', solicitud.id)

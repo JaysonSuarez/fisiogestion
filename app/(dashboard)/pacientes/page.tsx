@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase, getCachedUser } from '@/lib/supabase'
 import { OfflineSync } from '@/lib/offline-sync'
+import { notifyFisioPush } from '@/lib/push-notifications'
 import { 
   Search, 
   Plus, 
@@ -78,11 +79,20 @@ export default function PacientesPage() {
 
   const handleAssignTherapist = async (id: string, fisio: string) => {
     try {
+      const paciente = pacientes.find((p: any) => p.id === id)
       const { error } = await supabase
         .from('pacientes')
         .update({ fisioterapeuta: fisio })
         .eq('id', id)
       if (error) throw error
+      if (paciente && paciente.fisioterapeuta !== fisio) {
+        await notifyFisioPush({
+          targetFisio: fisio as Fisioterapeuta,
+          title: 'Te asignaron un nuevo paciente',
+          body: `${paciente.nombre} ahora está a tu cargo.`,
+          url: '/pacientes',
+        })
+      }
       setPacientes(prev => prev.map(p => p.id === id ? { ...p, fisioterapeuta: fisio } : p))
     } catch (e) {
       console.error('Error al asignar terapeuta:', e)

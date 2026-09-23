@@ -26,6 +26,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal'
 import { OfflineSync } from '@/lib/offline-sync'
 import { format12h, getIniciales, getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import { isHolidayColombia } from '@/lib/colombian-holidays'
+import { notifyFisioPush } from '@/lib/push-notifications'
 import type { Fisioterapeuta } from '@/types'
 
 const HORAS = ['07:00','08:00','09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00']
@@ -166,8 +167,19 @@ export default function AgendaPage() {
 
   const handleAssignTherapist = async (id: string, fisio: string) => {
     try {
+      const cita = citas.find((item: any) => item.id === id)
       const { error } = await supabase.from('citas').update({ fisioterapeuta: fisio }).eq('id', id)
       if (error) throw error
+      if (cita && cita.fisioterapeuta !== fisio) {
+        const fecha = String(cita.fecha || '')
+        const hora = String(cita.hora_inicio || '').slice(0, 5)
+        await notifyFisioPush({
+          targetFisio: fisio as Fisioterapeuta,
+          title: 'Te asignaron un horario',
+          body: `${cita.pacientes?.nombre || 'Un paciente'}: ${fecha}${hora ? ` a las ${hora}` : ''}.`,
+          url: '/agenda',
+        })
+      }
       setCitas(prev => prev.map(c => c.id === id ? { ...c, fisioterapeuta: fisio } : c))
       setSelectedCita((prev: any) => prev ? { ...prev, fisioterapeuta: fisio } : prev)
     } catch (e) { console.error(e) }

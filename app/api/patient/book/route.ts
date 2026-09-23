@@ -211,8 +211,8 @@ export async function POST(req: Request) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
         body: JSON.stringify({
-          target_role: 'profesional', title: 'Nueva reserva de paciente',
-          body: `${profile.nombre} reservó ${plan.sesiones} sesión(es).`, url: '/agenda',
+          target_fisio: 'Liliana', title: 'Nueva reserva de paciente',
+          body: `${profile.nombre} reservó ${plan.sesiones} sesión(es). Primera cita: ${orderedSlots[0].fecha} a las ${orderedSlots[0].hora}.`, url: '/agenda',
         }),
       })
     } catch { /* La reserva no debe fallar si el aviso al personal falla. */ }

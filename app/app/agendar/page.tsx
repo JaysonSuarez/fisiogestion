@@ -31,6 +31,9 @@ export default function PatientAgendarPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null)
   const [citasExistentes, setCitasExistentes] = useState<any[]>([])
+  const [disponibilidadCargando, setDisponibilidadCargando] = useState(true)
+  const [errorDisponibilidad, setErrorDisponibilidad] = useState('')
+  const [reintentoDisponibilidad, setReintentoDisponibilidad] = useState(0)
   const [user, setUser] = useState<any>(null)
   const [perfil, setPerfil] = useState<any>(null)
   const [motivo, setMotivo] = useState('')
@@ -87,17 +90,47 @@ export default function PatientAgendarPage() {
   useEffect(() => {
     const from = format(weekStart, 'yyyy-MM-dd')
     const to = format(addDays(weekStart, 7), 'yyyy-MM-dd')
-    fetch(`/api/patient/availability?from=${from}&to=${to}`, { cache: 'no-store' })
-      .then(async response => {
+    let active = true
+    let requestInFlight = false
+    let loaded = false
+    setDisponibilidadCargando(true)
+    setErrorDisponibilidad('')
+    setSlotsSeleccionados([])
+
+    async function cargarDisponibilidad() {
+      if (requestInFlight) return
+      requestInFlight = true
+      if (!loaded) setDisponibilidadCargando(true)
+      try {
+        const response = await fetch(`/api/patient/availability?from=${from}&to=${to}`, { cache: 'no-store' })
         const result = await response.json()
         if (!response.ok) throw new Error(result.error || 'No pudimos consultar la agenda.')
-        setCitasExistentes(result.citas || [])
-      })
-      .catch(error => {
+        if (active) {
+          setCitasExistentes(result.citas || [])
+          setErrorDisponibilidad('')
+          loaded = true
+        }
+      } catch (error: any) {
         console.error('No se pudo consultar disponibilidad:', error)
-        setCitasExistentes([])
-      })
-  }, [weekStart])
+        if (active) setErrorDisponibilidad(error.message || 'No pudimos consultar la agenda.')
+      } finally {
+        requestInFlight = false
+        if (active) setDisponibilidadCargando(false)
+      }
+    }
+
+    const alVolver = () => { if (document.visibilityState === 'visible') cargarDisponibilidad() }
+    cargarDisponibilidad()
+    window.addEventListener('focus', alVolver)
+    document.addEventListener('visibilitychange', alVolver)
+    const intervalo = window.setInterval(cargarDisponibilidad, 20000)
+    return () => {
+      active = false
+      window.clearInterval(intervalo)
+      window.removeEventListener('focus', alVolver)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
+  }, [weekStart, reintentoDisponibilidad])
 
   const isSlotRealmenteOcupado = (fecha: string, hora: string) => {
     const [hour, minute] = hora.split(':').map(Number)
@@ -201,6 +234,10 @@ export default function PatientAgendarPage() {
       setConfirmedTotal(data.total)
       setStep('enviado')
     } catch (err: any) {
+      if (String(err.message).includes('horario acaba de ocuparse')) {
+        setReintentoDisponibilidad(value => value + 1)
+        setStep('fechas')
+      }
       alert('Error: ' + err.message)
     } finally {
       setIsLoading(false)
@@ -351,6 +388,12 @@ export default function PatientAgendarPage() {
               <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="p-3 text-rose-300"><ChevronRight size={24} /></button>
             </div>
 
+            {(disponibilidadCargando || errorDisponibilidad) && (
+              <div role={errorDisponibilidad ? 'alert' : 'status'} className={`rounded-2xl px-4 py-3 text-xs font-bold ${errorDisponibilidad ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-rose-500'}`}>
+                {errorDisponibilidad ? <div className="flex items-center justify-between gap-3"><span>{errorDisponibilidad} Los horarios quedan bloqueados hasta poder actualizarlos.</span><button onClick={() => setReintentoDisponibilidad(value => value + 1)} className="shrink-0 underline">Reintentar</button></div> : 'Consultando horarios ocupados…'}
+              </div>
+            )}
+
             <div className="overflow-x-auto pb-2">
               <div className="min-w-[440px]">
                 <div className="grid grid-cols-[52px_repeat(6,1fr)] gap-2 mb-3">
@@ -376,7 +419,7 @@ export default function PatientAgendarPage() {
                         <button
                           key={d.fecha}
                           onClick={() => toggleSlot(d.fecha, hora)}
-                          disabled={ocupado || pasado || lleno}
+                          disabled={disponibilidadCargando || !!errorDisponibilidad || ocupado || pasado || lleno}
                           className={`h-12 rounded-xl text-[8px] font-black transition-all border-2 ${
                             seleccionado ? 'bg-rose-600 border-rose-700 text-white shadow-xl -translate-y-0.5' :
                             ocupado ? 'bg-slate-100 border-slate-200 text-slate-300 cursor-not-allowed' :

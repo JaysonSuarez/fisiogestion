@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { supabase, getCachedUser } from '@/lib/supabase'
 import { User, Phone, Stethoscope, DollarSign, Activity, FileText, ArrowLeft, Save, Loader2, Trash2, Calendar, CheckCircle2, Clock } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
+import { notifyFisioPush } from '@/lib/push-notifications'
 import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
 
@@ -100,6 +101,15 @@ export default function EditarPacientePage() {
         .eq('id', id)
 
       if (updateError) throw updateError
+
+      if (updates.fisioterapeuta && updates.fisioterapeuta !== patient?.fisioterapeuta) {
+        await notifyFisioPush({
+          targetFisio: updates.fisioterapeuta as Fisioterapeuta,
+          title: 'Te asignaron un nuevo paciente',
+          body: `${updates.nombre} ahora está a tu cargo.`,
+          url: '/pacientes',
+        })
+      }
 
       router.push('/pacientes')
       router.refresh()

@@ -145,7 +145,8 @@ export default function AgendarPage() {
     if (!cuponCodigo.trim() || validandoCupon) return
     setValidandoCupon(true)
     const servicio = planSeleccionado?.id === 'recovery-custom' ? 'personalizado' : planSeleccionado?.id || ''
-    const r = await validarCupon(cuponCodigo, servicio)
+    const sesiones = planSeleccionado?.id === 'recovery-custom' ? customSesiones : planSeleccionado?.sesiones
+    const r = await validarCupon(cuponCodigo, servicio, sesiones)
     setCuponResultado(r)
     setValidandoCupon(false)
   }
@@ -416,6 +417,7 @@ export default function AgendarPage() {
                               onChange={e => {
                                 const val = Math.max(1, Number(e.target.value));
                                 setCustomSesiones(val);
+                                setCuponResultado(null);
                                 if (planSeleccionado?.id === 'recovery-custom') {
                                   setPlanSeleccionado({
                                     ...plan,
@@ -487,7 +489,7 @@ export default function AgendarPage() {
                 <div className="flex items-center gap-2 text-rose-500 text-xs font-bold">
                   <XCircle size={14} />
                   {cuponResultado.estado === 'error_configuracion' ? 'No se pudieron verificar las condiciones del cupón. Intenta más tarde.' :
-                   cuponResultado.estado === 'no_aplica' ? 'Este cupón no aplica al servicio seleccionado.' :
+                   cuponResultado.estado === 'no_aplica' ? 'Este cupón no aplica al servicio o cantidad de sesiones seleccionados.' :
                    cuponResultado.estado === 'usado' ? 'Este cupón ya fue usado.' :
                    cuponResultado.estado === 'expirado' ? 'Este cupón está vencido.' :
                    'Código no encontrado.'}

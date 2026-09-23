@@ -124,6 +124,7 @@ export default function ValidarCuponPage() {
                         ? `${resultado.porcentaje_descuento}% OFF en ${resultado.servicios_aplicables?.length ? resultado.servicios_aplicables.map(id => SERVICIOS_CUPON.find(s => s.id === id)?.label || id).join(', ') : 'todos los servicios'}`
                         : 'Valoración Gratis · 10% OFF en planes'}
                     </div>
+                    {resultado.sesiones_minimas && <div className="text-xs text-rose-500 font-bold mt-1">Desde {resultado.sesiones_minimas} sesiones</div>}
                   </div>
                 </div>
               )}

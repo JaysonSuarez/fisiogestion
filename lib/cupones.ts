@@ -6,8 +6,8 @@ export type { EstadoCupon, ResultadoCupon }
 export const DESCUENTO_CUPON = 10
 
 // Consulta el cupón y determina su estado (sin modificarlo).
-export async function validarCupon(codigo: string, servicio = ''): Promise<ResultadoCupon> {
-  return await validarCuponAction(codigo, servicio)
+export async function validarCupon(codigo: string, servicio = '', sesiones?: number): Promise<ResultadoCupon> {
+  return await validarCuponAction(codigo, servicio, sesiones)
 }
 
 // Marca el cupón como usado de forma atómica (solo si aún NO estaba usado).

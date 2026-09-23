@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, getCachedUser } from '@/lib/supabase'
 import { UserPlus, ArrowLeft, User, Phone, Stethoscope, Activity, FileText, Loader2, CheckCircle } from 'lucide-react'
 import NotificationModal from '@/components/ui/NotificationModal'
+import { notifyFisioPush } from '@/lib/push-notifications'
 import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
 
@@ -73,6 +74,13 @@ export default function NuevoPacientePage() {
         .single()
 
       if (insertError) throw insertError
+
+      await notifyFisioPush({
+        targetFisio: selectedFisio,
+        title: 'Te asignaron un nuevo paciente',
+        body: `${nombre} ahora está a tu cargo.`,
+        url: '/pacientes',
+      })
 
       const accessResponse = await fetch('/api/patient/provision', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

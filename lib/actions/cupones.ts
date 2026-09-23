@@ -14,6 +14,7 @@ export type ResultadoCupon = {
   porcentaje_descuento?: number
   regla_configurada?: boolean
   servicios_aplicables?: string[]
+  sesiones_minimas?: number | null
 }
 
 // Cliente de Supabase en el servidor para evitar problemas de CORS desde el navegador
@@ -22,7 +23,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_ENCUESTA_SUPABASE_ANON_KEY!
 )
 
-export async function validarCuponAction(codigo: string, servicio: string): Promise<ResultadoCupon> {
+export async function validarCuponAction(codigo: string, servicio = '', sesiones?: number): Promise<ResultadoCupon> {
   const codigoLimpio = codigo.trim().toUpperCase()
   if (!codigoLimpio) return { estado: 'no_encontrado' }
 
@@ -48,7 +49,7 @@ export async function validarCuponAction(codigo: string, servicio: string): Prom
 
   const { data: regla, error: reglaError } = await getSupabaseAdmin()
     .from('reglas_cupones')
-    .select('porcentaje_descuento,servicios_aplicables')
+    .select('porcentaje_descuento,servicios_aplicables,sesiones_minimas')
     .eq('codigo_cupon', codigoLimpio)
     .maybeSingle()
 
@@ -58,10 +59,12 @@ export async function validarCuponAction(codigo: string, servicio: string): Prom
   }
   if (regla) {
     const servicios = regla.servicios_aplicables as string[] | null
-    if (servicios?.length && servicio && !servicios.includes(servicio)) {
-      return { estado: 'no_aplica', ...base, porcentaje_descuento: regla.porcentaje_descuento, regla_configurada: true, servicios_aplicables: servicios }
+    const servicioNoAplica = !!(servicios?.length && servicio && !servicios.includes(servicio))
+    const sesionesNoAplican = !!(regla.sesiones_minimas && sesiones !== undefined && sesiones < regla.sesiones_minimas)
+    if (servicioNoAplica || sesionesNoAplican) {
+      return { estado: 'no_aplica', ...base, porcentaje_descuento: regla.porcentaje_descuento, regla_configurada: true, servicios_aplicables: servicios || [], sesiones_minimas: regla.sesiones_minimas }
     }
-    return { estado: 'valido', ...base, porcentaje_descuento: regla.porcentaje_descuento, regla_configurada: true, servicios_aplicables: servicios || [] }
+    return { estado: 'valido', ...base, porcentaje_descuento: regla.porcentaje_descuento, regla_configurada: true, servicios_aplicables: servicios || [], sesiones_minimas: regla.sesiones_minimas }
   }
 
   // Conserva el descuento histórico para códigos sin una regla configurada.
