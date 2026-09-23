@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Share, PlusSquare, X, CheckCircle2, Send, Info } from 'lucide-react';
 import { subscribeUser } from '@/lib/push-subscription';
+import { getCachedUser, supabase } from '@/lib/supabase';
 
 interface PushManagerProps {
   mode?: 'floating' | 'inline';
@@ -34,12 +35,26 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
       setPermission(Notification.permission);
     }
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.pushManager.getSubscription().then(sub => {
-          if (sub) setIsSubscribed(true);
-        });
-      });
+    if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && Notification.permission === 'granted') {
+      // Una suscripción caducada se elimina en el servidor cuando falla el envío.
+      // Reponerla al abrir la app mantiene los avisos activos sin pedir permiso otra vez.
+      void (async () => {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        const user = await getCachedUser();
+        if (!user) return;
+        if (sub) {
+          const { data, error } = await supabase.from('push_subscriptions')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('subscription_data->>endpoint', sub.endpoint)
+            .maybeSingle();
+          if (error) return;
+          if (data) { setIsSubscribed(true); return; }
+          await sub.unsubscribe();
+        }
+        setIsSubscribed(await subscribeUser());
+      })().catch(error => console.error('Error restaurando notificaciones:', error));
     }
 
     if (ios && !standalone) {

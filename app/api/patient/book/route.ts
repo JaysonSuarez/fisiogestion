@@ -165,7 +165,7 @@ export async function POST(req: Request) {
       promo ? `Promoción: ${promo.titulo}.` : useFreeDischarge ? 'Descarga muscular gratis por recompensa de referido.' : useReferral ? 'Descuento de referido del 15%.' : '',
       home ? 'DOMICILIO.' : '',
     ].filter(Boolean).join(' ')
-    const { error: appointmentsError } = await admin.from('citas').insert(orderedSlots.map((slot: any) => ({
+    const { data: appointments, error: appointmentsError } = await admin.from('citas').insert(orderedSlots.map((slot: any) => ({
       paciente_id: patientId,
       sesion_id: session.id,
       fecha: slot.fecha,
@@ -175,7 +175,7 @@ export async function POST(req: Request) {
       notas: notes,
       paciente_notificado_1h: false,
       paciente_notificado_15m: false,
-    })))
+    }))).select('id,fecha,hora_inicio')
     if (appointmentsError) {
       await admin.from('sesiones').delete().eq('id', session.id)
       if (appointmentsError.code === '23P01' || appointmentsError.code === '23505') {
@@ -232,11 +232,15 @@ export async function POST(req: Request) {
       }
     }
 
+    const firstAppointment = appointments?.find((appointment: any) =>
+      appointment.fecha === orderedSlots[0].fecha &&
+      String(appointment.hora_inicio).slice(0, 5) === orderedSlots[0].hora
+    ) ?? appointments?.[0]
     await sendPushToFisio(
       'Liliana',
       'Nueva reserva desde la app',
       `${profile.nombre} reservó ${plan.label}. Primera cita: ${orderedSlots[0].fecha} a las ${orderedSlots[0].hora}.`,
-      '/agenda',
+      firstAppointment?.id ? `/agenda?cita_id=${encodeURIComponent(firstAppointment.id)}` : '/agenda',
     )
 
     return NextResponse.json({ success: true, total, currency: 'COP' })

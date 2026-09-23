@@ -18,6 +18,11 @@ serve(async (req) => {
     return new Response('ok', { headers: _corsHeaders })
   }
 
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!serviceRoleKey || req.headers.get('Authorization') !== `Bearer ${serviceRoleKey}`) {
+    return json({ error: 'No autorizado' }, 401)
+  }
+
   try {
     const payloadIn = await req.json()
     const {
@@ -61,9 +66,16 @@ serve(async (req) => {
       } else if (target_fisio) {
         // La fisioterapeuta se identifica por su correo (nombre@fisio.com), igual
         // que en la app. Sin esto un recordatorio iría a todo el mundo.
-        const { data: usuarios } = await supabase.auth.admin.listUsers()
-        const usuario = usuarios?.users?.find(u =>
-          (u.email ?? '').toLowerCase().includes(String(target_fisio).toLowerCase()))
+        // listUsers solo devuelve la primera página por defecto. Con más de 50
+        // pacientes, la cuenta del personal puede quedar fuera de esa página.
+        let usuario
+        for (let page = 1; ; page++) {
+          const { data: usuarios, error: usersError } = await supabase.auth.admin.listUsers({ page, perPage: 100 })
+          if (usersError) return json({ error: usersError.message }, 500)
+          usuario = usuarios.users.find(u =>
+            (u.email ?? '').toLowerCase().includes(String(target_fisio).toLowerCase()))
+          if (usuario || usuarios.users.length < 100) break
+        }
         if (!usuario) return json({ error: `Sin usuario para ${target_fisio}` }, 404)
         query = query.eq('user_id', usuario.id)
       } else if (target_role) {

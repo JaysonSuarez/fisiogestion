@@ -125,6 +125,29 @@ export default function AgendaPage() {
     return () => { supabase.removeChannel(channel) }
   }, [startOfCurrentWeek])
 
+  useEffect(() => {
+    const citaId = new URLSearchParams(window.location.search).get('cita_id')
+    if (!citaId) return
+    let active = true
+    const openLinkedAppointment = async () => {
+      const { data, error } = await supabase
+        .from('citas')
+        .select('*, pacientes(nombre)')
+        .eq('id', citaId)
+        .single()
+      if (!active) return
+      if (error || !data) {
+        setNotification({ isOpen: true, type: 'error', title: 'Cita no disponible', message: 'No pudimos encontrar esta cita.' })
+        return
+      }
+      setStartOfCurrentWeek(startOfWeek(new Date(`${data.fecha}T12:00:00`), { weekStartsOn: 1 }))
+      setSelectedCita(data)
+      setPanelMode('menu')
+    }
+    void openLinkedAppointment()
+    return () => { active = false }
+  }, [])
+
   // Detectar citas pasadas sin verificar (que no se hayan pospuesto)
   useEffect(() => {
     if (citas.length > 0 && !verificationCita && !selectedCita) {
