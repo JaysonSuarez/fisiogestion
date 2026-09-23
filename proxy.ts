@@ -82,8 +82,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url)
     }
   } else {
-    const isBookingRoute = path === '/agendar' || path.startsWith('/agendar/')
-    if (user?.app_metadata?.role === 'patient' && !isBookingRoute) {
+    if (user?.app_metadata?.role === 'patient') {
       const url = request.nextUrl.clone()
       url.pathname = '/app'
       return NextResponse.redirect(url)

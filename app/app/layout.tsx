@@ -2,6 +2,17 @@ import Link from 'next/link'
 import { Home, CalendarPlus, CalendarDays, User } from 'lucide-react'
 import PatientPushProvider from '@/components/patient/PatientPushProvider'
 import PatientBottomNav from '@/components/patient/PatientBottomNav'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Mi portal | FisioGestión',
+  manifest: '/manifest-agendar.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Mi Fisio',
+  },
+}
 
 export default function PatientAppLayout({ children }: { children: React.ReactNode }) {
   return (

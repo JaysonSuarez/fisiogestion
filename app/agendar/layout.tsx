@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Agenda tu cita | FisioGestión',
+  title: 'Portal del paciente | FisioGestión',
   manifest: '/manifest-agendar.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Agenda Fisio',
+    title: 'Mi Fisio',
   },
 }
 

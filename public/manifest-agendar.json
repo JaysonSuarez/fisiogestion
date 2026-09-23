@@ -1,9 +1,9 @@
 {
   "id": "/agendar-pwa",
-  "name": "Agenda FisioGestión",
-  "short_name": "Agenda Fisio",
-  "description": "Agenda y administra tus citas de fisioterapia.",
-  "start_url": "/agendar",
+  "name": "Portal Paciente FisioGestión",
+  "short_name": "Mi Fisio",
+  "description": "Consulta tus citas, agenda sesiones y descarga tus documentos de fisioterapia.",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

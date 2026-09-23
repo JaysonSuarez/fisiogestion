@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { format, addDays, startOfWeek, isBefore, isSameDay, startOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -227,6 +228,9 @@ export default function AgendarPage() {
         <p className="text-rose-400 font-bold text-xs uppercase tracking-widest">
           Fisioterapeuta · Liliana González
         </p>
+        <Link href="/app/login" className="mt-3 inline-flex rounded-full border border-rose-200 bg-white/80 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-rose-600 shadow-sm transition hover:bg-white">
+          ¿Ya tienes cuenta? Entra a tu portal
+        </Link>
       </div>
 
       {/* Step Progress */}
