@@ -88,7 +88,7 @@ export async function POST(req: Request) {
     }
 
     const orderedSlots = [...slots].sort((a: any, b: any) => `${a.fecha}${a.hora}`.localeCompare(`${b.fecha}${b.hora}`))
-    const dates = [...new Set(orderedSlots.map((s: any) => s.fecha))]
+    const dates = Array.from(new Set(orderedSlots.map((s: any) => s.fecha)))
     const { data: busy, error: busyError } = await admin.from('citas')
       .select('fecha,hora_inicio,duracion_minutos')
       .in('fecha', dates).neq('estado', 'cancelada')
