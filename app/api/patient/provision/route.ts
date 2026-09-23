@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       .from('patient_profiles').select('id').eq('id', staff.id).maybeSingle()
     if (existingPatientProfile) return NextResponse.json({ error: 'No autorizado.' }, { status: 403 })
 
-    const { patientId, referralCode } = await req.json()
+    const { patientId, referralCode, password: requestedPassword } = await req.json()
     if (typeof patientId !== 'string') return NextResponse.json({ error: 'Paciente inválido.' }, { status: 400 })
 
     const { data: patient, error: patientError } = await admin
@@ -28,8 +28,12 @@ export async function POST(req: Request) {
 
     const [nombre, ...apellidos] = patient.nombre.trim().split(/\s+/)
     const digits = (patient.telefono || '').replace(/\D/g, '')
-    if (!nombre || digits.length < 8) {
-      return NextResponse.json({ error: 'Completa el nombre y un teléfono válido para habilitar el acceso.' }, { status: 400 })
+    const hasValidPhone = /^\+?[\d\s().-]+$/.test(String(patient.telefono || '').trim()) && digits.length >= 8
+    const password = typeof requestedPassword === 'string' && requestedPassword.trim()
+      ? requestedPassword.trim()
+      : hasValidPhone ? digits : ''
+    if (!nombre || password.length < 8 || password.length > 72) {
+      return NextResponse.json({ error: 'Ingresa una contraseña inicial de 8 a 72 caracteres, o registra un teléfono válido.' }, { status: 400 })
     }
 
     const { data: activeProfiles, error: profileLookupError } = await admin.from('patient_profiles')
@@ -38,7 +42,7 @@ export async function POST(req: Request) {
     const firstNameKey = nombre.toLocaleLowerCase('es-CO')
     const hasAmbiguousLogin = (activeProfiles || []).some((profile: any) =>
       profile.nombre.trim().split(/\s+/)[0].toLocaleLowerCase('es-CO') === firstNameKey &&
-      String(profile.telefono || '').replace(/\D/g, '') === digits
+      hasValidPhone && String(profile.telefono || '').replace(/\D/g, '') === digits
     )
     if (hasAmbiguousLogin) {
       return NextResponse.json({ error: 'Ya existe una cuenta con ese primer nombre y teléfono. Revisa la ficha antes de habilitar el acceso.' }, { status: 409 })
@@ -55,7 +59,7 @@ export async function POST(req: Request) {
     const { data: auth, error: authError } = await admin.auth.admin.createUser({
       email: `paciente-${patient.id}@cuentas.fisiogestion.invalid`,
       email_confirm: true,
-      password: digits,
+      password,
       user_metadata: { role: 'patient' },
       app_metadata: { role: 'patient', must_change_password: false },
     })
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
       paciente_id: patient.id,
       nombre,
       apellido: apellidos.join(' ') || nombre,
-      telefono: patient.telefono,
+      telefono: hasValidPhone ? patient.telefono : '',
       diagnostico: patient.diagnostico,
       edad: patient.edad,
       sexo: patient.sexo || 'No especificado',
@@ -83,7 +87,15 @@ export async function POST(req: Request) {
       throw profileError
     }
 
-    return NextResponse.json({ created: true, username: nombre, initialPassword: digits })
+    if (!hasValidPhone && patient.telefono) {
+      const { error: phoneError } = await admin.from('pacientes').update({ telefono: '' }).eq('id', patient.id)
+      if (phoneError) {
+        await admin.auth.admin.deleteUser(auth.user.id)
+        throw phoneError
+      }
+    }
+
+    return NextResponse.json({ created: true, username: nombre, initialPassword: password })
   } catch (error: any) {
     console.error('No se pudo habilitar el acceso del paciente:', error)
     return NextResponse.json({ error: error.message || 'No se pudo crear el acceso.' }, { status: 500 })

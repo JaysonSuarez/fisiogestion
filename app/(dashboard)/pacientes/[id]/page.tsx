@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase, getCachedUser } from '@/lib/supabase'
-import { User, Phone, Stethoscope, DollarSign, Activity, FileText, ArrowLeft, Save, Loader2, Trash2, Calendar, CheckCircle2, Clock } from 'lucide-react'
+import { User, Phone, Stethoscope, DollarSign, Activity, FileText, ArrowLeft, Save, Loader2, Trash2, Calendar, CheckCircle2, Clock, KeyRound } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import { notifyFisioPush } from '@/lib/push-notifications'
 import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
@@ -21,6 +21,9 @@ export default function EditarPacientePage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [creatingAppUser, setCreatingAppUser] = useState(false)
+  const [appPassword, setAppPassword] = useState('')
+  const [appAccessInfo, setAppAccessInfo] = useState<{ username: string; password: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [patient, setPatient] = useState<any>(null)
   const [sesiones, setSesiones] = useState<any[]>([])
@@ -118,6 +121,28 @@ export default function EditarPacientePage() {
       setError(err.message || 'Error al guardar los cambios')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleCreateAppUser() {
+    setCreatingAppUser(true)
+    setError(null)
+    setAppAccessInfo(null)
+    try {
+      const response = await fetch('/api/patient/provision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: id, password: appPassword.trim() || undefined }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'No se pudo crear el usuario para la app.')
+      if (!result.created) throw new Error('Este paciente ya tiene un usuario para la app.')
+      setAppAccessInfo({ username: result.username, password: result.initialPassword })
+      setAppPassword('')
+    } catch (err: any) {
+      setError(err.message || 'No se pudo crear el usuario para la app.')
+    } finally {
+      setCreatingAppUser(false)
     }
   }
 
@@ -237,6 +262,21 @@ export default function EditarPacientePage() {
               </div>
 
               <div className="form-group">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Contraseña inicial de la app <span className="normal-case tracking-normal font-medium">(opcional)</span></label>
+                <input
+                  value={appPassword}
+                  onChange={e => setAppPassword(e.target.value)}
+                  autoComplete="new-password"
+                  type="password"
+                  minLength={8}
+                  maxLength={72}
+                  placeholder="Si se deja vacía, se usa el teléfono"
+                  className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-indigo-500 outline-none font-bold text-slate-900 bg-slate-50/30 transition-all"
+                />
+                <p className="mt-2 text-xs text-slate-400">Úsala cuando el paciente no tenga teléfono o necesite una clave personalizada. Guarda primero cualquier cambio de la ficha.</p>
+              </div>
+
+              <div className="form-group">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Diagnóstico Inicial</label>
                 <input 
                   name="diagnostico" 
@@ -328,7 +368,7 @@ export default function EditarPacientePage() {
                 ></textarea>
               </div>
 
-              <div className="flex justify-between items-center pt-8 border-t border-slate-50">
+              <div className="flex flex-wrap justify-between items-center gap-3 pt-8 border-t border-slate-50">
                 <button 
                   type="button" 
                   onClick={() => setConfirmDelete(true)}
@@ -337,15 +377,32 @@ export default function EditarPacientePage() {
                   <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
                   Eliminar Paciente
                 </button>
-                <button 
-                  type="submit" 
-                  disabled={saving}
-                  className="px-10 py-5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-3xl shadow-xl shadow-slate-100 flex items-center gap-3 disabled:opacity-50 transition-all active:scale-95 text-xs uppercase tracking-widest"
-                >
-                  {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                  {saving ? 'Guardando...' : 'Guardar Cambios'}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCreateAppUser}
+                    disabled={creatingAppUser || saving}
+                    className="px-6 py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-3xl shadow-xl shadow-indigo-100 flex items-center gap-3 disabled:opacity-50 transition-all active:scale-95 text-xs uppercase tracking-widest"
+                  >
+                    {creatingAppUser ? <Loader2 size={18} className="animate-spin" /> : <KeyRound size={18} />}
+                    {creatingAppUser ? 'Creando usuario...' : 'Crear usuario para la app'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving || creatingAppUser}
+                    className="px-10 py-5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-3xl shadow-xl shadow-slate-100 flex items-center gap-3 disabled:opacity-50 transition-all active:scale-95 text-xs uppercase tracking-widest"
+                  >
+                    {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {saving ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
               </div>
+              {appAccessInfo && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
+                <p className="font-black">Usuario de la app creado. Comparte estos datos con el paciente:</p>
+                <p className="mt-2 text-sm"><strong>Usuario:</strong> {appAccessInfo.username.toUpperCase()}</p>
+                <p className="mt-1 text-sm"><strong>Contraseña inicial:</strong> {appAccessInfo.password}</p>
+              </div>}
+              {error && <p role="alert" className="text-sm font-bold text-rose-600">{error}</p>}
             </form>
           </div>
         </div>
