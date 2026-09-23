@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import ServiceWorkerUpdateManager from '@/components/pwa/ServiceWorkerUpdateManager'
 
 export const metadata: Metadata = {
   title: 'FisioGestión',
@@ -36,25 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="antialiased bg-gray-50/50">
         {children}
-        
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(
-                     function(registration) {
-                      console.log('SW Registered:', registration.scope);
-                    },
-                    function(err) {
-                      console.log('SW Registration failed:', err);
-                    }
-                  );
-                });
-              }
-            `,
-          }}
-        />
+        <ServiceWorkerUpdateManager />
       </body>
     </html>
   )

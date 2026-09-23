@@ -8,13 +8,13 @@ import { format, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Script from 'next/script'
 import { format12h } from '@/lib/utils'
-import InstallAppCard from '@/components/patient/InstallAppCard'
 import { SERVICIOS_CUPON } from '@/lib/descuentos'
 import { PatientNotificationCard } from '@/components/patient/PatientPushProvider'
 
 export default function PatientHomePage() {
   const [perfil, setPerfil] = useState<any>(null)
   const [proximaCita, setProximaCita] = useState<any>(null)
+  const [progresoCita, setProgresoCita] = useState<{ actual: number; total: number } | null>(null)
   const [promociones, setPromociones] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -46,7 +46,22 @@ export default function PatientHomePage() {
           .limit(1)
         
         if (citas && citas.length > 0) {
-          setProximaCita(citas[0])
+          const nextAppointment = citas[0]
+          setProximaCita(nextAppointment)
+          if (nextAppointment.sesion_id) {
+            const [appointmentsResult, sessionResult] = await Promise.all([
+              supabase.from('citas').select('id,estado')
+                .eq('sesion_id', nextAppointment.sesion_id)
+                .order('fecha', { ascending: true })
+                .order('hora_inicio', { ascending: true }),
+              supabase.from('sesiones').select('duracion_minutos')
+                .eq('id', nextAppointment.sesion_id).maybeSingle(),
+            ])
+            const packageVisits = appointmentsResult.data || []
+            const appointmentIndex = packageVisits.findIndex(appointment => appointment.id === nextAppointment.id)
+            const expectedVisits = Math.floor((sessionResult.data?.duracion_minutos || 0) / 60)
+            if (appointmentIndex >= 0) setProgresoCita({ actual: appointmentIndex + 1, total: Math.max(expectedVisits, packageVisits.length) })
+          }
         }
       }
 
@@ -84,7 +99,6 @@ export default function PatientHomePage() {
         </div>
       </div>
 
-      <InstallAppCard />
       <PatientNotificationCard />
 
       {/* Promociones */}
@@ -139,7 +153,7 @@ export default function PatientHomePage() {
             <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
             <div className="relative z-10 flex justify-between items-center">
               <div>
-                <p className="text-rose-200 text-[10px] font-bold uppercase tracking-widest mb-1">
+                <p className="text-white text-xs font-black uppercase tracking-widest mb-2">
                   {isSameDay(new Date(proximaCita.fecha + 'T12:00:00'), new Date()) ? 'HOY' : format(new Date(proximaCita.fecha + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })}
                 </p>
                 <p className="font-black text-3xl tracking-tighter">
@@ -151,9 +165,10 @@ export default function PatientHomePage() {
               </div>
             </div>
             <div className="mt-6 flex justify-between items-center">
-              <span className="text-xs font-medium bg-rose-900/40 px-3 py-1.5 rounded-full">
-                En consultorio
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium bg-rose-900/40 px-3 py-1.5 rounded-full">En consultorio</span>
+                {progresoCita && <span className="text-xs font-black bg-white/20 px-3 py-1.5 rounded-full">Cita {progresoCita.actual}/{progresoCita.total}</span>}
+              </div>
               <Link href="/app/mis-citas" className="text-xs font-bold flex items-center gap-1 hover:text-rose-200 transition-colors">
                 Ver detalle <ChevronRight size={14} />
               </Link>

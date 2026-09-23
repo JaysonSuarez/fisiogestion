@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { User, LogOut, Share2, Ticket } from 'lucide-react'
+import { User, LogOut, Share2, Ticket, Gift } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function PerfilPage() {
@@ -33,7 +33,7 @@ export default function PerfilPage() {
 
   const handleShare = async () => {
     if (!perfil) return
-    const text = `¡Agenda tu cita de fisioterapia con Liliana! Comparte este código con la clínica al crear tu ficha: ${perfil.codigo_referido}. Después podrás reservar desde la app: ${window.location.origin}/app`
+    const text = `¡Agenda tu cita de fisioterapia con Liliana! Comparte este código con la clínica al crear tu ficha: ${perfil.codigo_referido}. Si agendas tu primera cita desde la app, ayudas a quien te invitó a acercarse a una descarga muscular gratis cada 5 referidos: ${window.location.origin}/app`
     
     if (navigator.share) {
       try {
@@ -53,6 +53,10 @@ export default function PerfilPage() {
   if (loading) {
     return <div className="p-8 text-center text-rose-300 font-bold animate-pulse mt-20">Cargando perfil...</div>
   }
+
+  const referidos = perfil?.referidos_completados || 0
+  const progresoDescarga = referidos % 5
+  const referidosRestantes = 5 - progresoDescarga
 
   return (
     <div className="px-6 py-8">
@@ -80,7 +84,7 @@ export default function PerfilPage() {
           </div>
           <div>
             <h3 className="font-black tracking-tighter text-lg">Gana Recompensas</h3>
-            <p className="text-[10px] text-white/80 uppercase tracking-widest font-bold">Sesión gratis al 7mo referido</p>
+            <p className="text-[10px] text-white/80 uppercase tracking-widest font-bold">Descarga muscular gratis cada 5 referidos</p>
           </div>
         </div>
         
@@ -102,9 +106,9 @@ export default function PerfilPage() {
             <span className="text-xs font-bold text-white/90">Personas referidas:</span>
             <span className="font-black flex items-center gap-1">
               <span className="text-white/80 text-xs tracking-widest">
-                {Array.from({ length: perfil?.referidos_completados || 0 }).map((_, i) => '*').join(' ')}
+                {Array.from({ length: 5 }).map((_, i) => i < progresoDescarga ? '★' : '☆').join(' ')}
               </span>
-              <span>(Llevas {perfil?.referidos_completados || 0})</span>
+              <span>(Llevas {referidos} · faltan {referidosRestantes})</span>
             </span>
           </div>
           {perfil?.descuentos_disponibles > 0 && (
@@ -119,11 +123,17 @@ export default function PerfilPage() {
               <span className="font-black text-amber-400">{perfil.sesiones_gratis}</span>
             </div>
           )}
+          {perfil?.descargas_gratis_disponibles > 0 && (
+            <div className="flex justify-between items-center px-2">
+              <span className="flex items-center gap-1 text-xs font-bold text-amber-200"><Gift size={14} /> Descargas gratis:</span>
+              <span className="font-black text-amber-300">{perfil.descargas_gratis_disponibles}</span>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 p-3 bg-rose-950/20 rounded-xl">
           <p className="text-[9px] text-white/80 font-medium leading-relaxed">
-            <strong className="font-bold text-white uppercase tracking-widest">Importante:</strong> Para recibir tu recompensa, la persona que invites debe compartir tu código cuando la clínica cree su ficha y <strong className="text-white">agendar su primera cita desde esta aplicación</strong>.
+            <strong className="font-bold text-white uppercase tracking-widest">Importante:</strong> Cuenta cada persona que registre tu código y agende su primera cita desde esta aplicación. Al llegar a 5 referidos confirmados recibes una descarga muscular gratis.
           </p>
         </div>
       </div>

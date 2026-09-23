@@ -40,6 +40,7 @@ export default function PatientAgendarPage() {
   const [esDomicilio, setEsDomicilio] = useState(false)
   const [customSessionsCount, setCustomSessionsCount] = useState(2)
   const [usarSesionGratis, setUsarSesionGratis] = useState(false)
+  const [usarDescargaGratis, setUsarDescargaGratis] = useState(false)
 
   const [planSeleccionado, setPlanSeleccionado] = useState<typeof PLANES_PRECIOS[0] | null>(null)
   const [activePromo, setActivePromo] = useState<any>(null)
@@ -193,16 +194,19 @@ export default function PatientAgendarPage() {
   // Solo se permite usar O promo O sesión gratis O descuento del 15% (No acumulables)
   const tieneDescuento = (perfil?.descuentos_disponibles || 0) > 0
   const tieneSesionGratis = (perfil?.sesiones_gratis || 0) > 0
+  const tieneDescargaGratis = (perfil?.descargas_gratis_disponibles || 0) > 0
 
-  const usoDescuento = tieneDescuento && !usarSesionGratis && !promoEfectiva
+  const usoDescuento = tieneDescuento && !usarSesionGratis && !usarDescargaGratis && !activePromo
   
   let basePrice = currentPlan ? currentPlan.precio : 0
   let discountPrice = basePrice
 
-  if (promoEfectiva && promoEfectiva.porcentaje_descuento) {
+  if (usarDescargaGratis && currentPlan?.id === 'descarga-muscular' && !activePromo) {
+    discountPrice = 0
+  } else if (promoEfectiva && promoEfectiva.porcentaje_descuento) {
     const ratio = 1 - (promoEfectiva.porcentaje_descuento / 100)
     discountPrice = Math.round(basePrice * ratio)
-  } else if (usarSesionGratis && currentPlan && !promoEfectiva) {
+  } else if (usarSesionGratis && currentPlan && !activePromo) {
     const precioPorSesion = Math.round(basePrice / currentPlan.sesiones)
     discountPrice = basePrice - precioPorSesion
   } else if (usoDescuento) {
@@ -225,6 +229,7 @@ export default function PatientAgendarPage() {
           motivo,
           esDomicilio,
           usarSesionGratis: usarSesionGratis && !promoEfectiva,
+          usarDescargaGratis: usarDescargaGratis && !promoEfectiva,
           usoDescuento: usoDescuento && !promoEfectiva,
           activePromo: promoEfectiva
         })
@@ -305,7 +310,11 @@ export default function PatientAgendarPage() {
               {PLANES_PRECIOS.map(plan => (
                 <button
                   key={plan.id}
-                  onClick={() => { setPlanSeleccionado(plan); setSlotsSeleccionados([]) }}
+                  onClick={() => {
+                    setPlanSeleccionado(plan)
+                    setSlotsSeleccionados([])
+                    if (plan.id !== 'descarga-muscular') setUsarDescargaGratis(false)
+                  }}
                   className={`p-5 rounded-[24px] border-2 text-left transition-all active:scale-95 ${
                     planSeleccionado?.id === plan.id ? 'border-rose-400 bg-rose-50 shadow-lg shadow-rose-100' : 'border-rose-50 bg-rose-50/30 hover:border-rose-100'
                   }`}
@@ -349,22 +358,35 @@ export default function PatientAgendarPage() {
               </label>
             </div>
 
-            {!promoEfectiva && tieneSesionGratis && currentPlan && (
+            {!activePromo && tieneSesionGratis && currentPlan && (
               <div className="bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-200 p-4 rounded-2xl flex items-center justify-between">
                 <div>
                   <p className="text-sm font-black text-amber-900">¡Tienes Sesiones Gratis!</p>
                   <p className="text-xs text-amber-700 font-bold">Usa 1 sesión gratis en este plan</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={usarSesionGratis} onChange={(e) => setUsarSesionGratis(e.target.checked)} />
+                  <input type="checkbox" className="sr-only peer" checked={usarSesionGratis} onChange={(e) => { setUsarSesionGratis(e.target.checked); if (e.target.checked) setUsarDescargaGratis(false) }} />
                   <div className="w-11 h-6 bg-amber-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-amber-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                 </label>
               </div>
             )}
 
-            {(usoDescuento || usarSesionGratis || promoEfectiva) && currentPlan && (
+            {!activePromo && tieneDescargaGratis && currentPlan?.id === 'descarga-muscular' && (
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-black text-emerald-900">Descarga muscular gratis</p>
+                  <p className="text-xs text-emerald-700 font-bold">Tienes {perfil.descargas_gratis_disponibles} recompensa(s) disponible(s)</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={usarDescargaGratis} onChange={(e) => { setUsarDescargaGratis(e.target.checked); if (e.target.checked) setUsarSesionGratis(false) }} />
+                  <div className="w-11 h-6 bg-emerald-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-emerald-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+            )}
+
+            {(usoDescuento || usarSesionGratis || usarDescargaGratis || promoEfectiva) && currentPlan && (
               <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-2xl text-xs font-bold flex justify-between items-center">
-                <span>{promoEfectiva ? `Promo: ${promoEfectiva.titulo}` : usarSesionGratis ? 'Sesión Gratis Aplicada' : 'Aplicando 15% Dto Referido'}</span>
+                <span>{promoEfectiva ? `Promo: ${promoEfectiva.titulo}` : usarDescargaGratis ? 'Descarga muscular gratis aplicada' : usarSesionGratis ? 'Sesión Gratis Aplicada' : 'Aplicando 15% Dto Referido'}</span>
                 <span className="font-black">{formatCOP(precioFinal)}</span>
               </div>
             )}
@@ -465,7 +487,7 @@ export default function PatientAgendarPage() {
               <div className="flex justify-between">
                 <span className="text-xs text-rose-400 font-bold">Valor Total</span>
                 <span className="text-sm font-black text-rose-600">
-                  {(usoDescuento || usarSesionGratis || promoEfectiva) && <span className="line-through text-rose-300 text-xs mr-2">{formatCOP(currentPlan.precio + totalDomicilio)}</span>}
+                  {(usoDescuento || usarSesionGratis || usarDescargaGratis || promoEfectiva) && <span className="line-through text-rose-300 text-xs mr-2">{formatCOP(currentPlan.precio + totalDomicilio)}</span>}
                   {formatCOP(precioFinal)}
                 </span>
               </div>

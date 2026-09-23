@@ -1,9 +1,8 @@
-const CACHE_NAME = 'fisio-gestion-v2';
+const CACHE_NAME = 'fisio-gestion-v3';
 const STATIC_ASSETS = [
-  '/',
   '/manifest.json',
-  '/logo.png',
-  '/globals.css'
+  '/manifest-agendar.json',
+  '/logo.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -12,18 +11,23 @@ self.addEventListener('install', (event) => {
       return cache.addAll(STATIC_ASSETS);
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
-      );
+    caches.keys().then(async (cacheNames) => {
+      await Promise.all(
+        cacheNames.filter(name => name.startsWith('fisio-gestion-') && name !== CACHE_NAME).map(name => caches.delete(name))
+      )
+      await self.clients.claim()
     })
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Estrategia Stale-While-Revalidate para archivos estáticos

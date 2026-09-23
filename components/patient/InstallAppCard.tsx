@@ -43,6 +43,6 @@ export default function InstallAppCard() {
       <div className="rounded-2xl bg-rose-50 p-3 text-rose-500">{ios ? <Share size={19} /> : <Download size={19} />}</div>
       <div className="min-w-0 flex-1"><h2 className="text-sm font-black text-rose-950">Lleva la app en tu celular</h2><p className="mt-1 text-xs text-rose-400">Agrégala a tu pantalla de inicio para abrirla fácilmente.</p></div>
     </div>
-    <button onClick={install} className="mt-3 w-full rounded-2xl bg-rose-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-600">{ios ? 'Cómo agregarla' : 'Instalar app'}</button>
+    <button type="button" onClick={install} className="mt-3 w-full rounded-2xl bg-rose-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-600">Instala ahora</button>
   </section>
 }

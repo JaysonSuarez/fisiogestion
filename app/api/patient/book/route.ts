@@ -120,12 +120,14 @@ export async function POST(req: Request) {
       if (!promo) return NextResponse.json({ error: 'Esta promoción ya no está disponible. Actualiza la página y revisa las promociones vigentes.' }, { status: 409 })
     }
 
-    const useFree = input.usarSesionGratis === true && !promo && (profile.sesiones_gratis || 0) > 0
-    const useReferral = !promo && !useFree && (profile.descuentos_disponibles || 0) > 0
+    const useFreeDischarge = input.usarDescargaGratis === true && planId === 'descarga-muscular' && !promo && (profile.descargas_gratis_disponibles || 0) > 0
+    const useFree = !useFreeDischarge && input.usarSesionGratis === true && !promo && (profile.sesiones_gratis || 0) > 0
+    const useReferral = !promo && !useFree && !useFreeDischarge && (profile.descuentos_disponibles || 0) > 0
     const requestedDiscount = promo ? Number(promo.porcentaje_descuento || 0) : (useReferral ? 15 : 0)
     const discountPercent = Math.min(100, Math.max(0, requestedDiscount))
     let total = Math.round(plan.precio * (1 - discountPercent / 100))
-    if (useFree) total = plan.precio - Math.round(plan.precio / plan.sesiones)
+    if (useFreeDischarge) total = 0
+    else if (useFree) total = plan.precio - Math.round(plan.precio / plan.sesiones)
     const home = input.esDomicilio === true
     if (home) total += plan.sesiones * 10000
 
@@ -150,13 +152,13 @@ export async function POST(req: Request) {
       // Aún no se registra un método hasta que la clínica reciba el pago.
       // `pendiente` corresponde al estado_pago y no es un método permitido.
       metodo_pago: null,
-      estado_pago: 'pendiente',
-      nota_clinica: input.motivo || null,
+      estado_pago: total === 0 ? 'pagado' : 'pendiente',
+      nota_clinica: [input.motivo || '', useFreeDischarge ? 'Descarga muscular gratis por recompensa de referido.' : ''].filter(Boolean).join(' ') || null,
     }).select('id').single()
     if (sessionError) throw sessionError
 
     const notes = [
-      promo ? `Promoción: ${promo.titulo}.` : useReferral ? 'Descuento de referido del 15%.' : '',
+      promo ? `Promoción: ${promo.titulo}.` : useFreeDischarge ? 'Descarga muscular gratis por recompensa de referido.' : useReferral ? 'Descuento de referido del 15%.' : '',
       home ? 'DOMICILIO.' : '',
     ].filter(Boolean).join(' ')
     const { error: appointmentsError } = await admin.from('citas').insert(orderedSlots.map((slot: any) => ({
@@ -178,20 +180,36 @@ export async function POST(req: Request) {
       throw appointmentsError
     }
 
+    if (useFreeDischarge) {
+      const { data: rewardConsumed, error: rewardError } = await admin.from('patient_profiles')
+        .update({ descargas_gratis_disponibles: profile.descargas_gratis_disponibles - 1 })
+        .eq('id', user.id)
+        .eq('descargas_gratis_disponibles', profile.descargas_gratis_disponibles)
+        .gt('descargas_gratis_disponibles', 0)
+        .select('id')
+        .maybeSingle()
+      if (rewardError || !rewardConsumed) {
+        await admin.from('citas').delete().eq('sesion_id', session.id)
+        await admin.from('sesiones').delete().eq('id', session.id)
+        if (rewardError) throw rewardError
+        return NextResponse.json({ error: 'La recompensa ya se usó en otra reserva. Actualiza la página y vuelve a intentarlo.' }, { status: 409 })
+      }
+    }
+
     if (useReferral) await admin.from('patient_profiles').update({ descuentos_disponibles: profile.descuentos_disponibles - 1 }).eq('id', user.id)
     if (useFree) await admin.from('patient_profiles').update({ sesiones_gratis: profile.sesiones_gratis - 1 }).eq('id', user.id)
 
     if (profile.referido_por && !profile.ya_dio_recompensa_referido) {
       const { data: referrer } = await admin.from('patient_profiles')
-        .select('descuentos_disponibles,referidos_completados,sesiones_gratis')
+        .select('descuentos_disponibles,referidos_completados,sesiones_gratis,descargas_gratis_disponibles')
         .eq('id', profile.referido_por).maybeSingle()
       if (referrer) {
         const referrals = (referrer.referidos_completados || 0) + 1
-        const isSeventh = referrals % 7 === 0
+        const earnsFreeDischarge = referrals % 5 === 0
         await admin.from('patient_profiles').update({
           referidos_completados: referrals,
-          ...(isSeventh
-            ? { sesiones_gratis: (referrer.sesiones_gratis || 0) + 1 }
+          ...(earnsFreeDischarge
+            ? { descargas_gratis_disponibles: (referrer.descargas_gratis_disponibles || 0) + 1 }
             : { descuentos_disponibles: (referrer.descuentos_disponibles || 0) + 1 }),
         }).eq('id', profile.referido_por)
         await admin.from('patient_profiles').update({ ya_dio_recompensa_referido: true }).eq('id', user.id)
@@ -202,7 +220,7 @@ export async function POST(req: Request) {
             body: JSON.stringify({
               target_user_id: profile.referido_por,
               title: 'Tienes una nueva recompensa',
-              body: isSeventh ? 'Completaste 7 referidos: tienes una sesión gratis.' : 'Tienes un nuevo descuento disponible.',
+              body: earnsFreeDischarge ? 'Completaste 5 referidos: tienes una descarga muscular gratis.' : 'Tienes un nuevo descuento disponible.',
               url: '/app/perfil',
             }),
           })

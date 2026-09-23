@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Heart, Loader2, Phone, User } from 'lucide-react'
+import InstallAppCard from '@/components/patient/InstallAppCard'
 
 export default function PatientLoginPage() {
   const [username, setUsername] = useState('')
@@ -42,6 +43,8 @@ export default function PatientLoginPage() {
           <h1 className="text-4xl font-black italic tracking-tighter mb-2">Liliana's Therapy</h1>
           <p className="text-rose-400 font-bold text-[10px] uppercase tracking-[0.3em]">Bienvenido Paciente</p>
         </div>
+
+        <InstallAppCard />
 
         <form 
           onSubmit={handleLogin}
