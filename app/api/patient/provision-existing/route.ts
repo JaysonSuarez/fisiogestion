@@ -25,6 +25,15 @@ export async function POST() {
     let alreadyReady = 0
     let skipped = 0
     const linkedProfiles = new Set<string>()
+    const loginIdentityCounts = new Map<string, number>()
+    for (const patient of patients || []) {
+      const phone = String(patient.telefono || '').replace(/\D/g, '')
+      if (phone.length < 8) continue
+      const firstName = patient.nombre.trim().split(/\s+/)[0].toLocaleLowerCase('es-CO')
+      const key = `${firstName}:${phone}`
+      loginIdentityCounts.set(key, (loginIdentityCounts.get(key) || 0) + 1)
+    }
+
     for (const patient of patients || []) {
       const existing = (profiles || []).find((profile: any) => profile.paciente_id === patient.id)
       const normalizedPhone = String(patient.telefono || '').replace(/\D/g, '')
@@ -43,6 +52,9 @@ export async function POST() {
         refreshed++
         continue
       }
+
+      const identityKey = `${firstName.toLocaleLowerCase('es-CO')}:${normalizedPhone}`
+      if ((loginIdentityCounts.get(identityKey) || 0) > 1) { skipped++; continue }
 
       const legacy = (profiles || []).find((profile: any) =>
         !profile.paciente_id && !linkedProfiles.has(profile.id) && profile.nombre.trim().split(/\s+/)[0].toLocaleLowerCase('es-CO') === firstName.toLocaleLowerCase('es-CO') &&

@@ -32,6 +32,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Completa el nombre y un teléfono válido para habilitar el acceso.' }, { status: 400 })
     }
 
+    const { data: activeProfiles, error: profileLookupError } = await admin.from('patient_profiles')
+      .select('nombre,telefono').eq('cuenta_activa', true)
+    if (profileLookupError) throw profileLookupError
+    const firstNameKey = nombre.toLocaleLowerCase('es-CO')
+    const hasAmbiguousLogin = (activeProfiles || []).some((profile: any) =>
+      profile.nombre.trim().split(/\s+/)[0].toLocaleLowerCase('es-CO') === firstNameKey &&
+      String(profile.telefono || '').replace(/\D/g, '') === digits
+    )
+    if (hasAmbiguousLogin) {
+      return NextResponse.json({ error: 'Ya existe una cuenta con ese primer nombre y teléfono. Revisa la ficha antes de habilitar el acceso.' }, { status: 409 })
+    }
+
     let referredBy: string | null = null
     if (typeof referralCode === 'string' && referralCode.trim()) {
       const { data: referrer } = await admin.from('patient_profiles').select('id')
