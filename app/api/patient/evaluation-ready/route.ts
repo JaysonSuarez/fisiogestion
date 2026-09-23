@@ -32,7 +32,10 @@ export async function POST(req: Request) {
         url: '/app/documentos',
       }),
     })
-    return NextResponse.json({ success: true, notified: response.ok })
+    const result = await response.json().catch(() => ({}))
+    const notified = response.ok && result?.success === true
+    if (!notified) console.error('La valoración se guardó, pero no se entregó el push al paciente:', result?.error || response.status)
+    return NextResponse.json({ success: true, notified }, { status: notified ? 200 : 502 })
   } catch (error: any) {
     console.error('No se pudo avisar que la evaluación está lista:', error)
     return NextResponse.json({ error: 'No se pudo enviar el aviso.' }, { status: 500 })

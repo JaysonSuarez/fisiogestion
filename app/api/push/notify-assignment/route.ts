@@ -38,13 +38,13 @@ export async function POST(req: Request) {
       body: JSON.stringify({ target_fisio: targetFisio, title, body, url }),
     })
     const result = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      console.warn('No se pudo enviar la notificación push:', result)
-      return NextResponse.json({ success: false }, { status: 200 })
+    if (!response.ok || result?.success !== true) {
+      console.warn('No se pudo entregar la notificación push:', result)
+      return NextResponse.json({ success: false, error: result?.error || 'No se pudo entregar la notificación.' }, { status: 502 })
     }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error enviando notificación push de asignación:', error)
-    return NextResponse.json({ success: false }, { status: 200 })
+    return NextResponse.json({ success: false, error: 'No se pudo entregar la notificación.' }, { status: 502 })
   }
 }

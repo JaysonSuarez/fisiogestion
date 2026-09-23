@@ -173,8 +173,18 @@ export default function AgendaPage() {
       if (cita && cita.fisioterapeuta !== fisio) {
         const fecha = String(cita.fecha || '')
         const hora = String(cita.hora_inicio || '').slice(0, 5)
+        const previousFisio = (cita.fisioterapeuta || 'Liliana') as Fisioterapeuta
+        const nextFisio = fisio as Fisioterapeuta
+        if (previousFisio !== nextFisio) {
+          await notifyFisioPush({
+            targetFisio: previousFisio,
+            title: 'Cambio en tu horario',
+            body: `${cita.pacientes?.nombre || 'Un paciente'} ya no está asignado contigo el ${fecha} a las ${hora}.`,
+            url: '/agenda',
+          })
+        }
         await notifyFisioPush({
-          targetFisio: fisio as Fisioterapeuta,
+          targetFisio: nextFisio,
           title: 'Te asignaron un horario',
           body: `${cita.pacientes?.nombre || 'Un paciente'}: ${fecha}${hora ? ` a las ${hora}` : ''}.`,
           url: '/agenda',
@@ -254,6 +264,12 @@ export default function AgendaPage() {
         })
         .eq('id', selectedCita.id)
       if (error) throw error
+      await notifyFisioPush({
+        targetFisio: (selectedCita.fisioterapeuta || 'Liliana') as Fisioterapeuta,
+        title: 'Actualización de tu horario',
+        body: `${selectedCita.pacientes?.nombre || 'Un paciente'}: nueva cita el ${rescheduleDate} a las ${rescheduleHour}.`,
+        url: '/agenda',
+      })
       OfflineSync.clearDashboardCache()
       setDismissedVerifications(prev => { const n = new Set(prev); n.delete(selectedCita.id); return n })
       setSelectedCita(null)
@@ -272,13 +288,30 @@ export default function AgendaPage() {
     if (!confirmDelete) return
     setSaving(true)
     try {
+      let deletedAppointments: any[] = []
       if (confirmDelete.type === 'cita') {
+        if (selectedCita?.id === confirmDelete.id) deletedAppointments = [selectedCita]
         const { error } = await supabase.from('citas').delete().eq('id', confirmDelete.id)
         if (error) throw error
       } else {
+        const { data: planCitas, error: planCitasError } = await supabase.from('citas')
+          .select('fecha,hora_inicio,fisioterapeuta,pacientes(nombre)').eq('sesion_id', confirmDelete.id)
+        if (planCitasError) throw planCitasError
+        deletedAppointments = planCitas || []
         // Borra el plan; las citas se eliminan por ON DELETE CASCADE
         const { error } = await supabase.from('sesiones').delete().eq('id', confirmDelete.id)
         if (error) throw error
+      }
+      const affectedPhysios = Array.from(new Set(deletedAppointments.map(c => c.fisioterapeuta || 'Liliana'))) as Fisioterapeuta[]
+      for (const targetFisio of affectedPhysios) {
+        const deletedForFisio = deletedAppointments.filter(c => (c.fisioterapeuta || 'Liliana') === targetFisio)
+        const appointment = deletedForFisio[0]
+        await notifyFisioPush({
+          targetFisio,
+          title: 'Horario cancelado',
+          body: `${appointment.pacientes?.nombre || 'Un paciente'}: se canceló ${deletedForFisio.length > 1 ? `${deletedForFisio.length} cita(s)` : 'la cita'} del ${appointment.fecha} a las ${String(appointment.hora_inicio).slice(0, 5)}.`,
+          url: '/agenda',
+        })
       }
       OfflineSync.clearDashboardCache()
       setConfirmDelete(null)

@@ -80,6 +80,17 @@ export default function PatientDocumentsPage() {
         firma: signature,
       })
     }
+
+    try {
+      const response = await fetch('/api/patient/evaluation-downloaded', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ evaluationId: evaluation.id }),
+      })
+      if (!response.ok) console.warn('No se pudo avisar al administrador de la descarga del documento.')
+    } catch (error) {
+      console.warn('No se pudo avisar al administrador de la descarga del documento:', error)
+    }
   }
 
   if (loading) return <div className="mt-20 p-8 text-center font-bold text-rose-300"><Loader2 className="mx-auto mb-3 animate-spin" />Cargando documentos…</div>

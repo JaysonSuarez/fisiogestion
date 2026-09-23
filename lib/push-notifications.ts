@@ -15,7 +15,10 @@ export async function notifyFisioPush(message: PushMessage) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(message),
     })
-    if (!response.ok) console.warn('No se pudo enviar el aviso push al fisioterapeuta.')
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok || result?.success !== true) {
+      console.warn('No se pudo entregar el aviso push al fisioterapeuta:', result?.error || response.status)
+    }
   } catch (error) {
     console.warn('No se pudo enviar el aviso push al fisioterapeuta:', error)
   }

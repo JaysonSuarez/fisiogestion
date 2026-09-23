@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { CalendarDays, Clock, CheckCircle, XCircle, Wallet } from 'lucide-react'
-import { format, isFuture, isSameDay } from 'date-fns'
+import { CalendarDays, Clock, CheckCircle, XCircle, Wallet, Loader2 } from 'lucide-react'
+import { format, isFuture, isSameDay, addDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { format12h, formatCOP } from '@/lib/utils'
+import { isHolidayColombia } from '@/lib/colombian-holidays'
 
 type Cita = {
   id: string
@@ -13,6 +14,7 @@ type Cita = {
   fecha: string
   hora_inicio: string
   estado: string
+  duracion_minutos?: number | null
 }
 
 type SesionPaquete = {
@@ -66,7 +68,7 @@ export default function MisCitasPage() {
 
       if (profile?.paciente_id) {
         const [appointmentsResult, sessionsResult] = await Promise.all([
-          supabase.from('citas').select('id,sesion_id,fecha,hora_inicio,estado')
+          supabase.from('citas').select('id,sesion_id,fecha,hora_inicio,estado,duracion_minutos')
             .eq('paciente_id', profile.paciente_id)
             .order('fecha', { ascending: false })
             .order('hora_inicio', { ascending: false }),
@@ -131,7 +133,7 @@ export default function MisCitasPage() {
             <section>
               <h2 className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-4">Próximas</h2>
               <div className="space-y-4">
-                {upcoming.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} />)}
+                {upcoming.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} onRescheduled={updated => setCitas(current => current.map(item => item.id === updated.id ? { ...item, ...updated } : item))} />)}
               </div>
             </section>
           )}
@@ -140,7 +142,7 @@ export default function MisCitasPage() {
             <section>
               <h2 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-4">Historial de citas</h2>
               <div className="space-y-4">
-                {past.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} />)}
+                {past.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} onRescheduled={updated => setCitas(current => current.map(item => item.id === updated.id ? { ...item, ...updated } : item))} />)}
               </div>
             </section>
           )}
@@ -234,7 +236,7 @@ function AmountSummary({ label, amount, emphasis = false }: { label: string; amo
   )
 }
 
-function CitaCard({ cita, citas, sesiones }: { cita: Cita; citas: Cita[]; sesiones: SesionPaquete[] }) {
+function CitaCard({ cita, citas, sesiones, onRescheduled }: { cita: Cita; citas: Cita[]; sesiones: SesionPaquete[]; onRescheduled: (cita: Partial<Cita> & { id: string }) => void }) {
   const isCancelled = cita.estado === 'cancelada'
   const isCompleted = cita.estado === 'completada'
   const session = sesiones.find(item => item.id === cita.sesion_id)
@@ -261,6 +263,8 @@ function CitaCard({ cita, citas, sesiones }: { cita: Cita; citas: Cita[]; sesion
     statusClass = 'text-emerald-800 bg-emerald-100'
   }
 
+  const [rescheduleOpen, setRescheduleOpen] = useState(false)
+
   return (
     <div className={`rounded-[24px] border p-5 shadow-lg shadow-rose-100/30 ${bgClass}`}>
       <div className="flex items-center gap-4">
@@ -276,6 +280,111 @@ function CitaCard({ cita, citas, sesiones }: { cita: Cita; citas: Cita[]; sesion
       {session && visitIndex >= 0 && packageSize > 1 && (
         <p className="ml-16 mt-2 text-[10px] font-black uppercase tracking-wider text-rose-600">Cita {visitIndex + 1}/{packageSize}</p>
       )}
+      {!isCancelled && !isCompleted && (
+        <button type="button" onClick={() => setRescheduleOpen(true)} className="mt-4 ml-16 rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-50">
+          Reagendar cita
+        </button>
+      )}
+      {rescheduleOpen && <RescheduleDialog cita={cita} onClose={() => setRescheduleOpen(false)} onRescheduled={updated => { onRescheduled(updated); setRescheduleOpen(false) }} />}
+    </div>
+  )
+}
+
+const RESCHEDULE_SLOTS = ['07:00', '08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
+
+function localDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function RescheduleDialog({ cita, onClose, onRescheduled }: { cita: Cita; onClose: () => void; onRescheduled: (cita: Partial<Cita> & { id: string }) => void }) {
+  const today = localDateString(new Date())
+  const [fecha, setFecha] = useState(cita.fecha >= today ? cita.fecha : today)
+  const [busy, setBusy] = useState<{ hora_inicio: string; duracion_minutos: number | null }[]>([])
+  const [loadingAvailability, setLoadingAvailability] = useState(true)
+  const [selectedTime, setSelectedTime] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setLoadingAvailability(true)
+    setSelectedTime('')
+    setError('')
+    fetch(`/api/patient/availability?from=${fecha}&to=${fecha}&citaId=${cita.id}`, { cache: 'no-store' })
+      .then(async response => {
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'No se pudieron consultar los horarios.')
+        if (active) setBusy(result.citas || [])
+      })
+      .catch(reason => { if (active) setError(reason.message || 'No se pudieron consultar los horarios.') })
+      .finally(() => { if (active) setLoadingAvailability(false) })
+    return () => { active = false }
+  }, [fecha, cita.id])
+
+  const day = new Date(`${fecha}T12:00:00`).getDay()
+  const isHoliday = isHolidayColombia(fecha)
+  const slots = day === 0 || isHoliday ? ['08:00', '09:00', '10:00', '11:00'] : day === 6 ? [] : RESCHEDULE_SLOTS
+  const duration = cita.duracion_minutos || 60
+  const isUnavailable = (time: string) => {
+    if (cita.fecha === fecha && cita.hora_inicio.slice(0, 5) === time) return true
+    const [hour, minute] = time.split(':').map(Number)
+    const start = hour * 60 + minute
+    const overlap = busy.some(appointment => {
+      const [busyHour, busyMinute] = appointment.hora_inicio.slice(0, 5).split(':').map(Number)
+      const busyStart = busyHour * 60 + busyMinute
+      return start < busyStart + (appointment.duracion_minutos || 60) && busyStart < start + duration
+    })
+    return overlap || `${fecha}T${time}` <= `${today}T${new Date().toTimeString().slice(0, 5)}`
+  }
+
+  async function save() {
+    if (!selectedTime) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch('/api/patient/reschedule', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ citaId: cita.id, fecha, hora: selectedTime }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'No se pudo reagendar la cita.')
+      onRescheduled(result.cita)
+    } catch (reason: any) {
+      setError(reason.message || 'No se pudo reagendar la cita.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby={`reschedule-title-${cita.id}`}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-white p-6 shadow-2xl sm:rounded-[28px]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id={`reschedule-title-${cita.id}`} className="text-xl font-black text-rose-950">Reagendar cita</h2>
+            <p className="mt-1 text-xs font-medium text-slate-500">Elige otro día y uno de los horarios disponibles.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100">Cerrar</button>
+        </div>
+
+        <label className="mt-6 block text-[10px] font-black uppercase tracking-widest text-rose-600" htmlFor={`reschedule-date-${cita.id}`}>Fecha</label>
+        <input id={`reschedule-date-${cita.id}`} type="date" value={fecha} min={today} max={localDateString(addDays(new Date(), 30))} onChange={event => setFecha(event.target.value)} className="mt-2 w-full rounded-2xl border border-rose-100 bg-rose-50/50 px-4 py-3 font-bold text-rose-950 outline-none focus:border-rose-300" />
+
+        <p className="mt-5 text-[10px] font-black uppercase tracking-widest text-rose-600">Horarios disponibles</p>
+        {loadingAvailability ? <div className="py-8 text-center text-sm font-bold text-rose-400">Consultando agenda…</div> : slots.length === 0 ? <p className="py-6 text-sm font-medium text-slate-500">No hay atención disponible ese día. Prueba con otra fecha.</p> : (
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {slots.map(time => {
+              const disabled = isUnavailable(time)
+              const selected = selectedTime === time
+              return <button key={time} type="button" disabled={disabled} onClick={() => setSelectedTime(time)} className={`rounded-xl border px-2 py-3 text-xs font-black transition ${selected ? 'border-rose-600 bg-rose-600 text-white' : disabled ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300 line-through' : 'border-rose-100 bg-white text-rose-700 hover:border-rose-300 hover:bg-rose-50'}`}>{format12h(time)}</button>
+            })}
+          </div>
+        )}
+        {error && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{error}</p>}
+        <button type="button" disabled={!selectedTime || saving || loadingAvailability} onClick={save} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-rose-200 transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">
+          {saving && <Loader2 size={16} className="animate-spin" />}{saving ? 'Reagendando…' : 'Confirmar nuevo horario'}
+        </button>
+        <p className="mt-3 text-center text-[10px] font-medium text-slate-400">Avisaremos a la clínica cuando se confirme el cambio.</p>
+      </div>
     </div>
   )
 }

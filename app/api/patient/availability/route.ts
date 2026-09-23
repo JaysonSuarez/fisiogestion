@@ -10,12 +10,13 @@ export async function GET(req: Request) {
 
   try {
     const admin = getSupabaseAdmin()
-    const { data: profile } = await admin.from('patient_profiles').select('id').eq('id', user.id).maybeSingle()
+    const { data: profile } = await admin.from('patient_profiles').select('id,paciente_id').eq('id', user.id).maybeSingle()
     if (!profile) return NextResponse.json({ error: 'Cuenta de paciente requerida.' }, { status: 403 })
 
     const { searchParams } = new URL(req.url)
     const from = searchParams.get('from') || ''
     const to = searchParams.get('to') || ''
+    const citaId = searchParams.get('citaId')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
       return NextResponse.json({ error: 'Rango de fechas inválido.' }, { status: 400 })
     }
@@ -23,10 +24,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Consulta un máximo de un mes a la vez.' }, { status: 400 })
     }
 
-    const { data, error } = await admin.from('citas')
+    if (citaId) {
+      const { data: cita, error: citaError } = await admin.from('citas')
+        .select('id').eq('id', citaId).eq('paciente_id', profile.paciente_id).maybeSingle()
+      if (citaError) throw citaError
+      if (!cita) return NextResponse.json({ error: 'No encontramos esa cita.' }, { status: 404 })
+    }
+
+    let query = admin.from('citas')
       .select('fecha,hora_inicio,duracion_minutos,estado')
       .gte('fecha', from).lte('fecha', to)
       .neq('estado', 'cancelada')
+    if (citaId) query = query.neq('id', citaId)
+    const { data, error } = await query
     if (error) throw error
 
     return NextResponse.json({ citas: data || [] }, { headers: { 'Cache-Control': 'private, no-store' } })

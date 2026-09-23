@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/api-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { isHolidayColombia } from '@/lib/colombian-holidays'
+import { sendPushToFisio } from '@/lib/server/push'
 
 const FIXED_PLANS: Record<string, { sesiones: number; precio: number; label: string }> = {
   evaluacion: { sesiones: 1, precio: 30000, label: 'Valoración' },
@@ -231,16 +232,12 @@ export async function POST(req: Request) {
       }
     }
 
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
-        body: JSON.stringify({
-          target_fisio: 'Liliana', title: 'Nueva reserva de paciente',
-          body: `${profile.nombre} reservó ${plan.sesiones} sesión(es). Primera cita: ${orderedSlots[0].fecha} a las ${orderedSlots[0].hora}.`, url: '/agenda',
-        }),
-      })
-    } catch { /* La reserva no debe fallar si el aviso al personal falla. */ }
+    await sendPushToFisio(
+      'Liliana',
+      'Nueva reserva desde la app',
+      `${profile.nombre} reservó ${plan.label}. Primera cita: ${orderedSlots[0].fecha} a las ${orderedSlots[0].hora}.`,
+      '/agenda',
+    )
 
     return NextResponse.json({ success: true, total, currency: 'COP' })
   } catch (error: any) {

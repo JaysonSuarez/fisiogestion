@@ -192,12 +192,24 @@ export default function SesionesPage() {
 
   const handleDeletePlan = async () => {
     if (!planToDelete) return
+    const affectedAppointments = selectedPlan?.id === planToDelete ? selectedPlan.citas || [] : []
     const { error } = await supabase.from('sesiones').delete().eq('id', planToDelete)
     setPlanToDelete(null)
     setIsEditModalOpen(false)
     if (error) {
       setNotification({ isOpen: true, type: 'error', title: 'Error al Eliminar', message: 'No se pudo eliminar el plan. Intenta de nuevo.' })
     } else {
+      const affectedPhysios = Array.from(new Set(affectedAppointments.map((cita: any) => cita.fisioterapeuta || 'Liliana'))) as Fisioterapeuta[]
+      for (const targetFisio of affectedPhysios) {
+        const canceled = affectedAppointments.filter((cita: any) => (cita.fisioterapeuta || 'Liliana') === targetFisio)
+        const first = canceled[0]
+        await notifyFisioPush({
+          targetFisio,
+          title: 'Horario cancelado',
+          body: `${selectedPlan?.pacientes?.nombre || 'Un paciente'}: se cancelaron ${canceled.length} cita(s), desde el ${first.fecha} a las ${String(first.hora_inicio).slice(0, 5)}.`,
+          url: '/agenda',
+        })
+      }
       setNotification({ isOpen: true, type: 'success', title: 'Plan Eliminado', message: 'El plan y todas sus sesiones han sido eliminados.' })
       loadSesiones()
     }
@@ -218,6 +230,7 @@ export default function SesionesPage() {
       const originalIds = selectedPlan.citas.map((c: any) => c.id)
       const currentIds = localCitas.filter(c => !c.isNew).map(c => c.id)
       const toDelete = originalIds.filter((id: string) => !currentIds.includes(id))
+      const deletedAppointments = selectedPlan.citas.filter((c: any) => toDelete.includes(c.id))
 
       if (toDelete.length > 0) {
         const { error: delError } = await supabase.from('citas').delete().in('id', toDelete)
@@ -260,14 +273,46 @@ export default function SesionesPage() {
         const original: any = c.isNew ? null : originalById.get(c.id)
         return c.isNew || (original && (
           (original.fisioterapeuta || 'Liliana') !== (c.fisioterapeuta || 'Liliana') ||
-          original.fecha !== c.fecha || String(original.hora_inicio).slice(0, 5) !== String(c.hora_inicio).slice(0, 5)
+          original.fecha !== c.fecha || String(original.hora_inicio).slice(0, 5) !== String(c.hora_inicio).slice(0, 5) ||
+          original.estado !== c.estado
         ))
       })
       for (const cita of changedAssignments) {
+        const original: any = cita.isNew ? null : originalById.get(cita.id)
+        const oldFisio = original ? (original.fisioterapeuta || 'Liliana') as Fisioterapeuta : null
+        const newFisio = (cita.fisioterapeuta || 'Liliana') as Fisioterapeuta
+        const patientName = selectedPlan.pacientes?.nombre || 'Un paciente'
+        const newTime = String(cita.hora_inicio).slice(0, 5)
+        if (oldFisio && oldFisio !== newFisio) {
+          await notifyFisioPush({
+            targetFisio: oldFisio,
+            title: 'Cambio en tu horario',
+            body: `${patientName}: la cita del ${original.fecha} a las ${String(original.hora_inicio).slice(0, 5)} fue reasignada.`,
+            url: '/agenda',
+          })
+          await notifyFisioPush({
+            targetFisio: newFisio,
+            title: 'Te asignaron un horario',
+            body: `${patientName}: ${cita.fecha} a las ${newTime}.`,
+            url: '/agenda',
+          })
+        } else {
+          await notifyFisioPush({
+            targetFisio: newFisio,
+            title: cita.isNew ? 'Te asignaron un horario' : 'Actualización de tu horario',
+            body: `${patientName}: ${cita.estado === 'cancelada' ? 'se canceló la cita' : 'cita actualizada'}${cita.estado === 'cancelada' ? ` del ${cita.fecha} a las ${newTime}` : ` para el ${cita.fecha} a las ${newTime}`}.`,
+            url: '/agenda',
+          })
+        }
+      }
+      const deletedPhysios = Array.from(new Set(deletedAppointments.map((cita: any) => cita.fisioterapeuta || 'Liliana'))) as Fisioterapeuta[]
+      for (const targetFisio of deletedPhysios) {
+        const canceled = deletedAppointments.filter((cita: any) => (cita.fisioterapeuta || 'Liliana') === targetFisio)
+        const first = canceled[0]
         await notifyFisioPush({
-          targetFisio: (cita.fisioterapeuta || 'Liliana') as Fisioterapeuta,
-          title: cita.isNew ? 'Te asignaron un horario' : 'Actualización de tu horario',
-          body: `${selectedPlan.pacientes?.nombre || 'Un paciente'}: ${cita.fecha} a las ${String(cita.hora_inicio).slice(0, 5)}.`,
+          targetFisio,
+          title: 'Horario cancelado',
+          body: `${selectedPlan.pacientes?.nombre || 'Un paciente'}: se cancelaron ${canceled.length} cita(s), desde el ${first.fecha} a las ${String(first.hora_inicio).slice(0, 5)}.`,
           url: '/agenda',
         })
       }
