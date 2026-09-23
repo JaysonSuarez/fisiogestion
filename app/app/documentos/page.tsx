@@ -5,7 +5,8 @@ import { FileText, Download, Loader2, CalendarDays } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { generateEvaluacionPDF } from '@/lib/generate-evaluacion-pdf'
 import { generateEvaluacionInicialPDF } from '@/lib/generate-evaluacion-inicial-pdf'
-import { PERFILES_FISIO, type Fisioterapeuta, type PerfilFisio } from '@/lib/utils'
+import { PERFILES_FISIO, type PerfilFisio } from '@/lib/utils'
+import type { Fisioterapeuta } from '@/types'
 
 export default function PatientDocumentsPage() {
   const [loading, setLoading] = useState(true)
