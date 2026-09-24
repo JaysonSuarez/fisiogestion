@@ -112,7 +112,8 @@ Antes de habilitarlo en producción:
 
 1. Aplica la migración `supabase/migrations/20260923171831_patient_portal_access_and_documents.sql` en el proyecto Supabase.
 2. Configura `SUPABASE_SERVICE_ROLE_KEY` como variable privada del servidor de Next.js. No debe empezar por `NEXT_PUBLIC_`.
-3. Confirma que la Edge Function `send-push` y sus claves VAPID estén desplegadas en Supabase.
-4. En **Pacientes**, pulsa **Habilitar app a existentes** una vez. Vincula perfiles por nombre y teléfono, crea los accesos que faltan y prepara la clave inicial como el teléfono sin espacios. El paciente puede entrar directamente con esa clave.
+3. Configura `NEXT_PUBLIC_VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY` en Next.js con el mismo par de claves VAPID que usa la Edge Function `send-push` en Supabase. La clave privada debe seguir siendo solo del servidor.
+4. Mantén desplegada la Edge Function `send-push` para los recordatorios automáticos de citas.
+5. En **Pacientes**, pulsa **Habilitar app a existentes** una vez. Vincula perfiles por nombre y teléfono, crea los accesos que faltan y prepara la clave inicial como el teléfono sin espacios. El paciente puede entrar directamente con esa clave.
 
 Cada nuevo paciente que registres después de esto recibirá su perfil de app junto con su ficha. Los recordatorios se dirigen al paciente que reservó y requieren que active las notificaciones en su celular.

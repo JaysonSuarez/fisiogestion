@@ -116,9 +116,18 @@ export default function PushManager({ mode = 'floating' }: PushManagerProps) {
         return;
       }
 
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setMensaje({ tipo: 'error', texto: 'La sesión expiró. Inicia sesión de nuevo y vuelve a probar.' });
+        return;
+      }
+
       const response = await fetch('/api/push/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ endpoint: sub.endpoint }),
       });
       const result = await response.json();
