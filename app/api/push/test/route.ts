@@ -44,5 +44,10 @@ export async function POST(req: Request) {
     '¡Listo! Las notificaciones funcionan en este dispositivo.',
     '/agenda',
   )
-  return NextResponse.json(result, { status: result.delivered ? 200 : 502 })
+  // PushManager espera el campo `success`; traducimos aquí el resultado del
+  // helper para que la interfaz no muestre error cuando el push sí fue entregado.
+  return NextResponse.json(
+    { success: result.delivered, error: result.error },
+    { status: result.delivered ? 200 : 502 },
+  )
 }
