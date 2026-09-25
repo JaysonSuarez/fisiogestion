@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase, getCachedUser } from '@/lib/supabase'
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -31,6 +31,33 @@ import { appointmentScheduleConflict, planAppointmentSeriesReschedule, type Seri
 import type { Fisioterapeuta } from '@/types'
 
 const HORAS = ['07:00','08:00','09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00']
+const CONFIRMED_ATTENDANCE_KEY = 'agenda-confirmed-attendance'
+
+function getConfirmedAttendanceIds() {
+  if (typeof window === 'undefined') return new Set<string>()
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(CONFIRMED_ATTENDANCE_KEY) || '[]')
+    return new Set<string>(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
+function saveConfirmedAttendanceId(id: string) {
+  try {
+    const ids = getConfirmedAttendanceIds()
+    ids.add(id)
+    sessionStorage.setItem(CONFIRMED_ATTENDANCE_KEY, JSON.stringify(Array.from(ids)))
+  } catch { /* La confirmación sigue dependiendo del guardado en Supabase. */ }
+}
+
+function forgetConfirmedAttendanceIds(idsToRemove: string[]) {
+  try {
+    const ids = getConfirmedAttendanceIds()
+    idsToRemove.forEach(id => ids.delete(id))
+    sessionStorage.setItem(CONFIRMED_ATTENDANCE_KEY, JSON.stringify(Array.from(ids)))
+  } catch { /* La reprogramación no depende del almacenamiento del navegador. */ }
+}
 
 // Horas laborales según el día (domingo/festivo reducido, sábado cerrado)
 function horasLaborales(fecha: string): string[] {
@@ -58,8 +85,9 @@ export default function AgendaPage() {
 
   // Verificación de asistencia (citas pasadas)
   const [verificationCita, setVerificationCita] = useState<any>(null)
-  const [dismissedVerifications, setDismissedVerifications] = useState<Set<string>>(new Set())
+  const [dismissedVerifications, setDismissedVerifications] = useState<Set<string>>(() => getConfirmedAttendanceIds())
   const [saving, setSaving] = useState(false)
+  const attendanceSavingRef = useRef(false)
 
   // Panel de gestión de una cita (calendario interactivo)
   const [selectedCita, setSelectedCita] = useState<any>(null)
@@ -151,7 +179,7 @@ export default function AgendaPage() {
 
   // Detectar citas pasadas sin verificar (que no se hayan pospuesto)
   useEffect(() => {
-    if (citas.length > 0 && !verificationCita && !selectedCita) {
+    if (citas.length > 0 && !verificationCita && !selectedCita && !notification.isOpen) {
       const currentTime = new Date()
       const pastDue = citas.find(c => {
         if (dismissedVerifications.has(c.id)) return false
@@ -160,25 +188,39 @@ export default function AgendaPage() {
       })
       if (pastDue) setVerificationCita(pastDue)
     }
-  }, [citas, verificationCita, selectedCita, dismissedVerifications])
+  }, [citas, verificationCita, selectedCita, dismissedVerifications, notification.isOpen])
 
   // ─── Acciones ───────────────────────────────────────────────────────────────
 
   const handleConfirmAttendance = async (attended: boolean) => {
-    if (!verificationCita || saving) return
+    if (!verificationCita || saving || attendanceSavingRef.current) return
     if (!attended) {
       // "No asistió / pendiente" → posponer para no bloquear la vista
       setDismissedVerifications(prev => new Set(prev).add(verificationCita.id))
       setVerificationCita(null)
       return
     }
+    attendanceSavingRef.current = true
     setSaving(true)
     try {
-      const { error } = await supabase.from('citas').update({ estado: 'completada' }).eq('id', verificationCita.id)
+      const citaId = verificationCita.id
+      const { data: updated, error } = await supabase.from('citas')
+        .update({ estado: 'completada' })
+        .eq('id', citaId)
+        .in('estado', ['pendiente', 'confirmada', 'confirmado'])
+        .select('id,estado')
+        .maybeSingle()
       if (error) throw error
+      if (!updated) {
+        const { data: current, error: readError } = await supabase.from('citas')
+          .select('id,estado').eq('id', citaId).maybeSingle()
+        if (readError) throw readError
+        if (!current || !esCompletada(current.estado)) throw new Error('La cita no se guardó como completada. Recarga la agenda e inténtalo de nuevo.')
+      }
+      saveConfirmedAttendanceId(citaId)
       OfflineSync.clearDashboardCache()
-      setDismissedVerifications(prev => new Set(prev).add(verificationCita.id))
-      const updatedCitas = citas.map(c => c.id === verificationCita.id ? { ...c, estado: 'completada' } : c)
+      setDismissedVerifications(prev => new Set(prev).add(citaId))
+      const updatedCitas = citas.map(c => c.id === citaId ? { ...c, estado: 'completada' } : c)
       setCitas(updatedCitas)
       OfflineSync.saveToCache(`agenda-${format(startOfCurrentWeek, 'yyyy-MM-dd')}`, updatedCitas)
       setVerificationCita(null)
@@ -186,8 +228,12 @@ export default function AgendaPage() {
       await loadCitas()
     } catch (err) {
       console.error(err)
-      setNotification({ isOpen: true, type: 'error', title: 'Error', message: 'No pudimos marcar la asistencia.' })
+      const message = err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
+        ? err.message
+        : 'No pudimos marcar la asistencia.'
+      setNotification({ isOpen: true, type: 'error', title: 'Error', message })
     } finally {
+      attendanceSavingRef.current = false
       setSaving(false)
     }
   }
@@ -299,6 +345,7 @@ export default function AgendaPage() {
 
       const { error: updateError } = await supabase.rpc('reschedule_appointment_series', { p_updates: changes })
       if (updateError) throw updateError
+      forgetConfirmedAttendanceIds(changes.map(change => change.id))
       await notifyFisioPush({
         targetFisio: (selectedCita.fisioterapeuta || 'Liliana') as Fisioterapeuta,
         title: 'Actualización de tu horario',
@@ -313,7 +360,10 @@ export default function AgendaPage() {
       await loadCitas()
     } catch (err) {
       console.error(err)
-      setNotification({ isOpen: true, type: 'error', title: 'Error', message: 'No pudimos mover la cita.' })
+      const message = err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
+        ? err.message
+        : 'No pudimos mover la cita.'
+      setNotification({ isOpen: true, type: 'error', title: 'Error', message })
     } finally {
       setSaving(false)
     }

@@ -40,3 +40,5 @@ revoke all on function public.reschedule_appointment_series(jsonb) from public;
 revoke all on function public.reschedule_appointment_series(jsonb) from anon;
 grant execute on function public.reschedule_appointment_series(jsonb) to authenticated;
 grant execute on function public.reschedule_appointment_series(jsonb) to service_role;
+
+notify pgrst, 'reload schema';
