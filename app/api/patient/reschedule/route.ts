@@ -3,6 +3,7 @@ import { getApiUser } from '@/lib/api-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { isHolidayColombia } from '@/lib/colombian-holidays'
 import { sendPushToFisio } from '@/lib/server/push'
+import { appointmentScheduleConflict, planAppointmentSeriesReschedule, type SeriesAppointment } from '@/lib/appointment-series'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
     if (!profile?.paciente_id) return NextResponse.json({ error: 'Cuenta de paciente requerida.' }, { status: 403 })
 
     const { data: cita, error: citaError } = await admin.from('citas')
-      .select('id,paciente_id,fecha,hora_inicio,duracion_minutos,estado,fisioterapeuta')
+      .select('id,paciente_id,sesion_id,fecha,hora_inicio,duracion_minutos,estado,fisioterapeuta,notas')
       .eq('id', citaId).eq('paciente_id', profile.paciente_id).maybeSingle()
     if (citaError) throw citaError
     if (!cita) return NextResponse.json({ error: 'No encontramos esa cita.' }, { status: 404 })
@@ -72,39 +73,52 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Elige un horario diferente al actual.' }, { status: 400 })
     }
 
+    let planAppointments: SeriesAppointment[] = [cita]
+    if (cita.sesion_id) {
+      const { data, error } = await admin.from('citas')
+        .select('id,fecha,hora_inicio,estado,notas,duracion_minutos,fisioterapeuta')
+        .eq('sesion_id', cita.sesion_id).eq('paciente_id', profile.paciente_id)
+      if (error) throw error
+      planAppointments = (data || []) as SeriesAppointment[]
+    }
+    const changes = planAppointmentSeriesReschedule(planAppointments, citaId, fecha, hora)
+    for (const change of changes) {
+      const changeDay = new Date(`${change.fecha}T12:00:00`).getDay()
+      const changeIsHoliday = isHolidayColombia(change.fecha)
+      const changeSlots = changeDay === 0 || changeIsHoliday ? HOLIDAY_SLOTS : changeDay === 6 ? new Set<string>() : WEEKDAY_SLOTS
+      if (!changeSlots.has(change.hora_inicio.slice(0, 5))) {
+        return NextResponse.json({ error: `Al mover las sesiones, el horario del ${change.fecha} no está disponible para atención. Elige otra fecha u hora.` }, { status: 400 })
+      }
+    }
+
+    const targetDates = Array.from(new Set(changes.map(change => change.fecha)))
     const { data: busy, error: busyError } = await admin.from('citas')
-      .select('hora_inicio,duracion_minutos')
-      .eq('fecha', fecha).neq('estado', 'cancelada').neq('id', citaId)
+      .select('id,fecha,hora_inicio,duracion_minutos,fisioterapeuta')
+      .in('fecha', targetDates).neq('estado', 'cancelada')
     if (busyError) throw busyError
-    const [hour, minute] = hora.split(':').map(Number)
-    const start = hour * 60 + minute
-    const duration = cita.duracion_minutos || 60
-    const overlaps = (busy || []).some(appointment => {
-      const [busyHour, busyMinute] = String(appointment.hora_inicio).slice(0, 5).split(':').map(Number)
-      const busyStart = busyHour * 60 + busyMinute
-      return start < busyStart + (appointment.duracion_minutos || 60) && busyStart < start + duration
-    })
-    if (overlaps) return NextResponse.json({ error: 'Ese horario acaba de ocuparse. Elige otro disponible.' }, { status: 409 })
+    const conflict = appointmentScheduleConflict(changes, busy || [], planAppointments)
+    if (conflict) return NextResponse.json({ error: `El horario del ${conflict.fecha} acaba de ocuparse. Elige otra fecha u hora.` }, { status: 409 })
 
     const oldDate = cita.fecha
     const oldTime = String(cita.hora_inicio).slice(0, 5)
-    const { data: updated, error: updateError } = await admin.from('citas')
-      .update({ fecha, hora_inicio: hora })
-      .eq('id', citaId).eq('paciente_id', profile.paciente_id)
-      .select('id,fecha,hora_inicio,estado')
-      .maybeSingle()
+    const { error: updateError } = await admin.rpc('reschedule_appointment_series', { p_updates: changes })
     if (updateError) {
       if (updateError.code === '23P01' || updateError.code === '23505') {
         return NextResponse.json({ error: 'Ese horario acaba de ocuparse. Elige otro disponible.' }, { status: 409 })
       }
       throw updateError
     }
+    const { data: updatedAppointments, error: readError } = await admin.from('citas')
+      .select('id,fecha,hora_inicio,estado')
+      .in('id', changes.map(change => change.id))
+    if (readError) throw readError
+    const updated = updatedAppointments?.find(appointment => appointment.id === citaId)
     if (!updated) return NextResponse.json({ error: 'No pudimos actualizar la cita. Recarga e inténtalo de nuevo.' }, { status: 409 })
 
     await sendPushToFisio(
       'Liliana',
       'Un paciente reagendó una cita',
-      `${profile.nombre || 'Un paciente'} cambió su cita del ${oldDate} a las ${oldTime} para el ${fecha} a las ${hora}.`,
+      `${profile.nombre || 'Un paciente'} cambió su cita del ${oldDate} a las ${oldTime} para el ${fecha} a las ${hora}${changes.length > 1 ? ` y se movieron ${changes.length - 1} sesiones posteriores` : ''}.`,
       '/agenda',
     )
     const assignedFisio = (cita.fisioterapeuta || 'Liliana') as 'Liliana' | 'Jeniffer'
@@ -112,12 +126,12 @@ export async function POST(req: Request) {
       await sendPushToFisio(
         assignedFisio,
         'Un paciente actualizó su horario',
-        `${profile.nombre || 'Un paciente'} cambió su cita para el ${fecha} a las ${hora}.`,
+        `${profile.nombre || 'Un paciente'} cambió su cita para el ${fecha} a las ${hora}${changes.length > 1 ? ` y se movieron ${changes.length - 1} sesiones posteriores` : ''}.`,
         '/agenda',
       )
     }
 
-    return NextResponse.json({ success: true, cita: updated })
+    return NextResponse.json({ success: true, cita: updated, citas: updatedAppointments || [] })
   } catch (error: any) {
     console.error('No se pudo reagendar la cita:', error)
     return NextResponse.json({ error: error.message || 'No se pudo reagendar la cita.' }, { status: 500 })

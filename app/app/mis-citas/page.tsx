@@ -133,7 +133,7 @@ export default function MisCitasPage() {
             <section>
               <h2 className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-4">Próximas</h2>
               <div className="space-y-4">
-                {upcoming.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} onRescheduled={updated => setCitas(current => current.map(item => item.id === updated.id ? { ...item, ...updated } : item))} />)}
+                {upcoming.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} onRescheduled={updated => setCitas(current => current.map(item => { const change = updated.find(candidate => candidate.id === item.id); return change ? { ...item, ...change } : item }))} />)}
               </div>
             </section>
           )}
@@ -142,7 +142,7 @@ export default function MisCitasPage() {
             <section>
               <h2 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-4">Historial de citas</h2>
               <div className="space-y-4">
-                {past.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} onRescheduled={updated => setCitas(current => current.map(item => item.id === updated.id ? { ...item, ...updated } : item))} />)}
+                {past.map(cita => <CitaCard key={cita.id} cita={cita} citas={citas} sesiones={sesiones} onRescheduled={updated => setCitas(current => current.map(item => { const change = updated.find(candidate => candidate.id === item.id); return change ? { ...item, ...change } : item }))} />)}
               </div>
             </section>
           )}
@@ -236,7 +236,7 @@ function AmountSummary({ label, amount, emphasis = false }: { label: string; amo
   )
 }
 
-function CitaCard({ cita, citas, sesiones, onRescheduled }: { cita: Cita; citas: Cita[]; sesiones: SesionPaquete[]; onRescheduled: (cita: Partial<Cita> & { id: string }) => void }) {
+function CitaCard({ cita, citas, sesiones, onRescheduled }: { cita: Cita; citas: Cita[]; sesiones: SesionPaquete[]; onRescheduled: (citas: Array<Partial<Cita> & { id: string }>) => void }) {
   const isCancelled = cita.estado === 'cancelada'
   const isCompleted = cita.estado === 'completada'
   const session = sesiones.find(item => item.id === cita.sesion_id)
@@ -296,7 +296,7 @@ function localDateString(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function RescheduleDialog({ cita, onClose, onRescheduled }: { cita: Cita; onClose: () => void; onRescheduled: (cita: Partial<Cita> & { id: string }) => void }) {
+function RescheduleDialog({ cita, onClose, onRescheduled }: { cita: Cita; onClose: () => void; onRescheduled: (citas: Array<Partial<Cita> & { id: string }>) => void }) {
   const today = localDateString(new Date())
   const [fecha, setFecha] = useState(cita.fecha >= today ? cita.fecha : today)
   const [busy, setBusy] = useState<{ hora_inicio: string; duracion_minutos: number | null }[]>([])
@@ -348,7 +348,7 @@ function RescheduleDialog({ cita, onClose, onRescheduled }: { cita: Cita; onClos
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'No se pudo reagendar la cita.')
-      onRescheduled(result.cita)
+      onRescheduled(result.citas || [result.cita])
     } catch (reason: any) {
       setError(reason.message || 'No se pudo reagendar la cita.')
       setSaving(false)

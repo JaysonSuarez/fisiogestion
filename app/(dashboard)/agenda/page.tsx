@@ -27,6 +27,7 @@ import { OfflineSync } from '@/lib/offline-sync'
 import { format12h, getIniciales, getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
 import { isHolidayColombia } from '@/lib/colombian-holidays'
 import { notifyFisioPush } from '@/lib/push-notifications'
+import { appointmentScheduleConflict, planAppointmentSeriesReschedule, type SeriesAppointment } from '@/lib/appointment-series'
 import type { Fisioterapeuta } from '@/types'
 
 const HORAS = ['07:00','08:00','09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00']
@@ -164,7 +165,7 @@ export default function AgendaPage() {
   // ─── Acciones ───────────────────────────────────────────────────────────────
 
   const handleConfirmAttendance = async (attended: boolean) => {
-    if (!verificationCita) return
+    if (!verificationCita || saving) return
     if (!attended) {
       // "No asistió / pendiente" → posponer para no bloquear la vista
       setDismissedVerifications(prev => new Set(prev).add(verificationCita.id))
@@ -176,7 +177,10 @@ export default function AgendaPage() {
       const { error } = await supabase.from('citas').update({ estado: 'completada' }).eq('id', verificationCita.id)
       if (error) throw error
       OfflineSync.clearDashboardCache()
-      setCitas(prev => prev.map(c => c.id === verificationCita.id ? { ...c, estado: 'completada' } : c))
+      setDismissedVerifications(prev => new Set(prev).add(verificationCita.id))
+      const updatedCitas = citas.map(c => c.id === verificationCita.id ? { ...c, estado: 'completada' } : c)
+      setCitas(updatedCitas)
+      OfflineSync.saveToCache(`agenda-${format(startOfCurrentWeek, 'yyyy-MM-dd')}`, updatedCitas)
       setVerificationCita(null)
       setNotification({ isOpen: true, type: 'success', title: 'Sesión Completada', message: 'La cita se marcó como completada.' })
       await loadCitas()
@@ -274,30 +278,38 @@ export default function AgendaPage() {
     if (!selectedCita || !rescheduleDate || !rescheduleHour) return
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('citas')
-        .update({
-          fecha: rescheduleDate,
-          hora_inicio: rescheduleHour,
-          estado: 'pendiente',
-          notificado_1h: false,
-          notificado_10m: false,
-          paciente_notificado_1h: false,
-          paciente_notificado_15m: false,
-        })
-        .eq('id', selectedCita.id)
-      if (error) throw error
+      let planAppointments: SeriesAppointment[] = [selectedCita]
+      if (selectedCita.sesion_id) {
+        const { data, error } = await supabase.from('citas')
+          .select('id,fecha,hora_inicio,estado,notas,duracion_minutos,fisioterapeuta')
+          .eq('sesion_id', selectedCita.sesion_id)
+        if (error) throw error
+        planAppointments = (data || []) as SeriesAppointment[]
+      }
+      const changes = planAppointmentSeriesReschedule(planAppointments, selectedCita.id, rescheduleDate, rescheduleHour)
+        .map(change => ({ ...change, ...(change.id === selectedCita.id ? { estado: 'pendiente' } : {}) }))
+      const targetDates = Array.from(new Set(changes.map(change => change.fecha)))
+      const { data: busyAppointments, error: busyError } = await supabase.from('citas')
+        .select('id,fecha,hora_inicio,estado,duracion_minutos,fisioterapeuta')
+        .in('fecha', targetDates)
+        .neq('estado', 'cancelada')
+      if (busyError) throw busyError
+      const conflict = appointmentScheduleConflict(changes, (busyAppointments || []) as SeriesAppointment[], planAppointments)
+      if (conflict) throw new Error(`El horario de la sesión del ${conflict.fecha} se cruza con otra cita. Elige otra fecha u hora.`)
+
+      const { error: updateError } = await supabase.rpc('reschedule_appointment_series', { p_updates: changes })
+      if (updateError) throw updateError
       await notifyFisioPush({
         targetFisio: (selectedCita.fisioterapeuta || 'Liliana') as Fisioterapeuta,
         title: 'Actualización de tu horario',
-        body: `${selectedCita.pacientes?.nombre || 'Un paciente'}: nueva cita el ${rescheduleDate} a las ${rescheduleHour}.`,
+        body: `${selectedCita.pacientes?.nombre || 'Un paciente'}: cita actualizada para el ${rescheduleDate} a las ${rescheduleHour}${changes.length > 1 ? `; se movieron ${changes.length - 1} sesiones posteriores` : ''}.`,
         url: '/agenda',
       })
       OfflineSync.clearDashboardCache()
       setDismissedVerifications(prev => { const n = new Set(prev); n.delete(selectedCita.id); return n })
       setSelectedCita(null)
       setVerificationCita(null)
-      setNotification({ isOpen: true, type: 'success', title: 'Cita Reprogramada', message: 'Se movió correctamente y se reprogramaron los avisos.' })
+      setNotification({ isOpen: true, type: 'success', title: 'Cita Reprogramada', message: changes.length > 1 ? `Se movieron esta cita y ${changes.length - 1} sesiones posteriores. Los avisos quedaron reprogramados.` : 'Se movió correctamente y se reprogramaron los avisos.' })
       await loadCitas()
     } catch (err) {
       console.error(err)
