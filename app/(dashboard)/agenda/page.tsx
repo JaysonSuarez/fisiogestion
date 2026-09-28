@@ -346,12 +346,16 @@ export default function AgendaPage() {
       const { error: updateError } = await supabase.rpc('reschedule_appointment_series', { p_updates: changes })
       if (updateError) throw updateError
       forgetConfirmedAttendanceIds(changes.map(change => change.id))
-      await notifyFisioPush({
-        targetFisio: (selectedCita.fisioterapeuta || 'Liliana') as Fisioterapeuta,
-        title: 'Actualización de tu horario',
-        body: `${selectedCita.pacientes?.nombre || 'Un paciente'}: cita actualizada para el ${rescheduleDate} a las ${rescheduleHour}${changes.length > 1 ? `; se movieron ${changes.length - 1} sesiones posteriores` : ''}.`,
-        url: '/agenda',
-      })
+      for (const change of changes) {
+        const previous = planAppointments.find(appointment => appointment.id === change.id)
+        if (previous?.fecha === change.fecha && String(previous.hora_inicio).slice(0, 5) === String(change.hora_inicio).slice(0, 5)) continue
+        await notifyFisioPush({
+          targetFisio: (previous?.fisioterapeuta || selectedCita.fisioterapeuta || 'Liliana') as Fisioterapeuta,
+          title: 'Cambio en tu horario',
+          body: `${selectedCita.pacientes?.nombre || 'Un paciente'}: cita del ${previous?.fecha} a las ${String(previous?.hora_inicio || '').slice(0, 5)} cambiada al ${change.fecha} a las ${String(change.hora_inicio).slice(0, 5)}.`,
+          url: `/agenda?cita_id=${change.id}`,
+        })
+      }
       OfflineSync.clearDashboardCache()
       setDismissedVerifications(prev => { const n = new Set(prev); n.delete(selectedCita.id); return n })
       setSelectedCita(null)

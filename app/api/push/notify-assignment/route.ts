@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getApiUser } from '@/lib/api-auth'
 import { FISIOTERAPEUTAS, getFisioDeEmail } from '@/lib/utils'
 import type { Fisioterapeuta } from '@/types'
+import { sendPushToFisio } from '@/lib/server/push'
 
 export async function POST(req: Request) {
   const user = await getApiUser()
@@ -27,20 +28,12 @@ export async function POST(req: Request) {
     if (!isOwner && targetFisio !== callerFisio) {
       return NextResponse.json({ error: 'No puedes notificar a otra fisioterapeuta.' }, { status: 403 })
     }
-    if (targetFisio === callerFisio) return NextResponse.json({ success: true, skipped: true })
+    if (targetFisio === callerFisio && targetFisio !== 'Jeniffer') return NextResponse.json({ success: true, skipped: true })
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-push`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ target_fisio: targetFisio, title, body, url }),
-    })
-    const result = await response.json().catch(() => ({}))
-    if (!response.ok || result?.success !== true) {
+    const result = await sendPushToFisio(targetFisio, title, body, url)
+    if (!result.delivered) {
       console.warn('No se pudo entregar la notificación push:', result)
-      return NextResponse.json({ success: false, error: result?.error || 'No se pudo entregar la notificación.' }, { status: 502 })
+      return NextResponse.json({ success: false, error: result.error || 'No se pudo entregar la notificación.' }, { status: 502 })
     }
     return NextResponse.json({ success: true })
   } catch (error) {

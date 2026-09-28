@@ -271,13 +271,14 @@ export default function NuevaSesionPage({
       if (citasError) throw citasError
 
       const pacienteNombre = pacientes.find(p => p.id === pacienteId)?.nombre || 'un paciente'
-      const primeraCita = citasToInsert[0]
-      await notifyFisioPush({
-        targetFisio: activeFisio,
-        title: 'Te asignaron un nuevo horario',
-        body: `${pacienteNombre}: ${primeraCita.fecha} a las ${primeraCita.hora_inicio}. ${cantidadSesiones} sesión(es).`,
-        url: '/agenda',
-      })
+      for (const cita of citasToInsert) {
+        await notifyFisioPush({
+          targetFisio: activeFisio,
+          title: 'Nueva cita asignada',
+          body: `${pacienteNombre}: ${cita.fecha} a las ${String(cita.hora_inicio).slice(0, 5)}.`,
+          url: '/agenda',
+        })
+      }
 
       setNotification({
         isOpen: true,
