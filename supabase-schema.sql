@@ -47,6 +47,7 @@ CREATE TABLE citas (
   estado            TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('confirmada','pendiente','cancelada','completada')),
   notas             TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT citas_fecha_no_sabado CHECK (EXTRACT(DOW FROM fecha) <> 6),
 
   -- Evitar cruces de horario: no puede haber dos citas que se solapen el mismo día
   CONSTRAINT no_cruce_horario EXCLUDE USING gist (

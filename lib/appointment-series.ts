@@ -40,6 +40,12 @@ function addDays(date: string, days: number) {
   return `${result.getUTCFullYear()}-${String(result.getUTCMonth() + 1).padStart(2, '0')}-${String(result.getUTCDate()).padStart(2, '0')}`
 }
 
+function skipSaturday(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+  return weekday === 6 ? addDays(date, 2) : date
+}
+
 export function planAppointmentSeriesReschedule(
   appointments: SeriesAppointment[],
   appointmentId: string,
@@ -56,7 +62,7 @@ export function planAppointmentSeriesReschedule(
     .filter(appointment => !['cancelada', 'completada', 'completado'].includes((appointment.estado || '').toLowerCase()))
     .map(appointment => ({
       id: appointment.id,
-      fecha: addDays(appointment.fecha, shiftDays),
+      fecha: skipSaturday(addDays(appointment.fecha, shiftDays)),
       hora_inicio: hora,
     }))
 }

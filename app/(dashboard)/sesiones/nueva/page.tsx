@@ -5,11 +5,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase, getCachedUser } from '@/lib/supabase'
 import { ClipboardPlus, ArrowLeft, User, Calendar, Package, DollarSign, Wallet, CheckCircle, FileText, Info, Loader2, Clock, Check, AlertCircle, Sparkles, Flower2, Heart, Ticket, Tag, XCircle } from 'lucide-react'
-import { addDays, isSunday, getDay } from 'date-fns'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import NotificationModal from '@/components/ui/NotificationModal'
 import { validarCupon, reclamarCupon, aplicarDescuentoCupon, type ResultadoCupon } from '@/lib/cupones'
 import { notifyFisioPush } from '@/lib/push-notifications'
 import { getFisioDeEmail, esDuena, FISIOTERAPEUTAS } from '@/lib/utils'
+import { planSessionDates, type SessionFrequency } from '@/lib/session-schedule'
 import type { Fisioterapeuta } from '@/types'
 
 const formatCOP = (valor: number) => {
@@ -22,7 +24,6 @@ const DAYS_OF_WEEK = [
   { id: 3, label: 'M', full: 'Miércoles' },
   { id: 4, label: 'J', full: 'Jueves' },
   { id: 5, label: 'V', full: 'Viernes' },
-  { id: 6, label: 'S', full: 'Sábado' },
 ]
 
 export default function NuevaSesionPage({
@@ -57,6 +58,14 @@ export default function NuevaSesionPage({
   // Scheduling State
   const [frecuencia, setFrecuencia] = useState('todos_los_dias')
   const [diasCustom, setDiasCustom] = useState<number[]>([1, 3, 5]) // Default L-M-V
+  const [fechaInicio, setFechaInicio] = useState(() => new Date().toISOString().split('T')[0])
+  const [horaInicio, setHoraInicio] = useState('08:00')
+  const [permiteDomingo, setPermiteDomingo] = useState<boolean | null>(null)
+
+  const datesWithSunday = planSessionDates(fechaInicio, cantidadSesiones, frecuencia as SessionFrequency, diasCustom, true, horaInicio)
+  const datesWithoutSunday = planSessionDates(fechaInicio, cantidadSesiones, frecuencia as SessionFrequency, diasCustom, false, horaInicio)
+  const needsSundayChoice = datesWithSunday.some((date, index) => date !== datesWithoutSunday[index])
+  const plannedDates = needsSundayChoice && permiteDomingo === true ? datesWithSunday : datesWithoutSunday
 
   // Payment State
   const [hizoAbono, setHizoAbono] = useState(false)
@@ -120,6 +129,7 @@ export default function NuevaSesionPage({
   const handleCambioSesiones = (val: number, type: string) => {
     setCantidadSesiones(val)
     setTipoPlan(type)
+    setPermiteDomingo(null)
     setCuponResultado(null)
     const minPrice = getMinPrice(val, type)
     setValorPorSesion(minPrice)
@@ -130,6 +140,7 @@ export default function NuevaSesionPage({
   }
 
   const toggleDiaCustom = (id: number) => {
+    setPermiteDomingo(null)
     setDiasCustom(prev => 
       prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
     )
@@ -171,12 +182,21 @@ export default function NuevaSesionPage({
        })
        return
     }
+    if (needsSundayChoice && permiteDomingo === null) {
+      setNotification({
+        isOpen: true,
+        type: 'info',
+        title: 'Confirma el día de atención',
+        message: 'Una sesión de este plan podría quedar en domingo. Indica si el paciente puede asistir ese día o si prefieres pasarla al lunes.'
+      })
+      return
+    }
     
     setLoading(true)
     
     const formData = new FormData(e.currentTarget)
-    const fechaInicioStr = formData.get('fecha') as string
-    const horaCita = formData.get('hora_cita') as string
+    const fechaInicioStr = fechaInicio
+    const horaCita = horaInicio
     const nota_clinica = formData.get('nota_clinica') as string
 
     try {      
@@ -185,7 +205,6 @@ export default function NuevaSesionPage({
       // Si quien crea el plan es una empleada, las citas son suyas; si es la dueña,
       // atiende la fisioterapeuta que eligió en el formulario.
       const activeFisio = esDuena(fisio) ? fisioPlan : fisio
-      let currentCitaDate = new Date(fechaInicioStr + 'T12:00:00')
       let abonoRestante = hizoAbono && esDuena(fisio) ? Number(montoAbono) : 0
 
       // Si hay cupón aplicado, reclamarlo de forma atómica (un solo uso).
@@ -209,7 +228,7 @@ export default function NuevaSesionPage({
       // Crear solo un registro de "Plan" (sesion) primero para obtener su ID
       const { data: planData, error: planError } = await supabase.from('sesiones').insert([{
         paciente_id: pacienteId,
-        fecha: fechaInicioStr,
+        fecha: plannedDates[0] || fechaInicioStr,
         valor: valorConDescuento,
         monto_pagado: (hizoAbono && esDuena(fisio)) ? abonoRestante : 0,
         metodo_pago: (hizoAbono && esDuena(fisio)) ? metodoPago : null,
@@ -224,25 +243,7 @@ export default function NuevaSesionPage({
       const sesionId = planData.id
 
       // Generar las citas individuales para la agenda
-      const citasToInsert = []
-      for (let i = 0; i < cantidadSesiones; i++) {
-        while (true) {
-          const day = getDay(currentCitaDate)
-          // No se labora los sábados, se pasa al domingo
-          if (day === 6) {
-            currentCitaDate = addDays(currentCitaDate, 1)
-            continue
-          }
-          if (frecuencia === 'custom' && !diasCustom.includes(day)) {
-            currentCitaDate = addDays(currentCitaDate, 1)
-            continue
-          }
-          break
-        }
-
-        const dateStr = currentCitaDate.toISOString().split('T')[0]
-
-        citasToInsert.push({
+      const citasToInsert = plannedDates.map((dateStr, i) => ({
           sesion_id: sesionId,
           paciente_id: pacienteId,
           fecha: dateStr,
@@ -251,21 +252,7 @@ export default function NuevaSesionPage({
           estado: 'pendiente', 
           fisioterapeuta: activeFisio,
           notas: `Sesión ${i+1}/${cantidadSesiones}. ${nota_clinica}`
-        })
-
-        if (frecuencia === 'todos_los_dias') {
-          currentCitaDate = addDays(currentCitaDate, 1)
-        } else if (frecuencia === 'dia_de_por_medio') {
-          currentCitaDate = addDays(currentCitaDate, 2)
-        } else if (frecuencia === 'custom') {
-          currentCitaDate = addDays(currentCitaDate, 1)
-        } else if (frecuencia === 'lunes_miercoles_viernes') {
-          const day = getDay(currentCitaDate)
-          if (day === 1 || day === 3) currentCitaDate = addDays(currentCitaDate, 2)
-          else if (day === 5) currentCitaDate = addDays(currentCitaDate, 3)
-          else currentCitaDate = addDays(currentCitaDate, 1)
-        }
-      }
+        }))
 
       const { error: citasError } = await supabase.from('citas').insert(citasToInsert)
       if (citasError) throw citasError
@@ -374,7 +361,7 @@ export default function NuevaSesionPage({
               <label className="text-[10px] font-black text-rose-300 uppercase tracking-[0.2em] mb-4 block flex items-center gap-2">
                  <Calendar size={12} /> Fecha de Inicio
               </label>
-              <input name="fecha" className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-rose-50/20 text-rose-900 font-black" type="date" defaultValue={new Date().toISOString().split('T')[0]} required />
+              <input name="fecha" className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-rose-50/20 text-rose-900 font-black" type="date" value={fechaInicio} onChange={e => { setFechaInicio(e.target.value); setPermiteDomingo(null) }} required />
             </div>
           </div>
 
@@ -500,14 +487,14 @@ export default function NuevaSesionPage({
             <div className="grid grid-cols-2 gap-6">
                <div className="form-group">
                   <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Hora</label>
-                  <input name="hora_cita" className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none font-black text-rose-900 bg-rose-50/20 text-center" type="time" defaultValue="08:00" required />
+                  <input name="hora_cita" className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none font-black text-rose-900 bg-rose-50/20 text-center" type="time" value={horaInicio} onChange={e => { setHoraInicio(e.target.value); setPermiteDomingo(null) }} required />
                </div>
                <div className="form-group">
                   <label className="text-[10px] font-black text-rose-300 uppercase mb-3 block">Frecuencia</label>
                   <select 
                     className="w-full px-6 py-4 rounded-[24px] border-2 border-rose-50 focus:border-rose-400 outline-none bg-white font-black text-rose-700 shadow-sm text-center appearance-none"
                     value={frecuencia}
-                    onChange={e => setFrecuencia(e.target.value)}
+                    onChange={e => { setFrecuencia(e.target.value); setPermiteDomingo(null) }}
                   >
                     <option value="todos_los_dias">Diario</option>
                     <option value="dia_de_por_medio">Interdiario</option>
@@ -571,6 +558,49 @@ export default function NuevaSesionPage({
                      <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest italic leading-none">Deuda proyectada: {formatCOP(valorConDescuento)}</span>
                   </div>
                 )}
+
+            {needsSundayChoice && (
+              <div className="p-5 bg-amber-50 border border-amber-200 rounded-[28px] space-y-3">
+                <div>
+                  <p className="text-[10px] font-black text-rose-950 uppercase tracking-widest">Una sesión puede quedar en domingo</p>
+                  <p className="mt-1 text-xs text-rose-700">¿Este paciente puede asistir ese día? Los sábados siempre se omiten.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPermiteDomingo(true)}
+                    aria-pressed={permiteDomingo === true}
+                    className={`p-3 rounded-2xl border text-xs font-black transition-colors ${permiteDomingo === true ? 'border-rose-500 bg-rose-600 text-white' : 'border-rose-200 bg-white text-rose-700'}`}
+                  >
+                    Sí, domingo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPermiteDomingo(false)}
+                    aria-pressed={permiteDomingo === false}
+                    className={`p-3 rounded-2xl border text-xs font-black transition-colors ${permiteDomingo === false ? 'border-rose-500 bg-rose-600 text-white' : 'border-rose-200 bg-white text-rose-700'}`}
+                  >
+                    No, pasar al lunes
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {plannedDates.length > 0 && (
+              <div className="p-5 bg-white border border-rose-100 rounded-[28px]">
+                <p className="text-[10px] font-black text-rose-950 uppercase tracking-widest mb-3">Fechas previstas</p>
+                <ol className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-rose-700">
+                  {plannedDates.map((date, index) => (
+                    <li key={`${date}-${index}`} className="font-bold">
+                      <span className="text-rose-300">{index + 1}.</span> {format(new Date(`${date}T12:00:00`), 'EEE d MMM', { locale: es })}
+                    </li>
+                  ))}
+                </ol>
+                {needsSundayChoice && permiteDomingo === false && (
+                  <p className="mt-3 text-[10px] text-rose-400">Al mover una sesión al lunes, la frecuencia continúa desde ese lunes.</p>
+                )}
+              </div>
+            )}
               </div>
             </div>
           )}      </div>

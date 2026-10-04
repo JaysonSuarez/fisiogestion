@@ -33,6 +33,10 @@ import type { Fisioterapeuta } from '@/types'
 const HORAS = ['07:00','08:00','09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00']
 const CONFIRMED_ATTENDANCE_KEY = 'agenda-confirmed-attendance'
 
+function esSabado(fecha: string) {
+  return new Date(`${fecha}T12:00:00`).getDay() === 6
+}
+
 function getConfirmedAttendanceIds() {
   if (typeof window === 'undefined') return new Set<string>()
   try {
@@ -94,6 +98,7 @@ export default function AgendaPage() {
   const [panelMode, setPanelMode] = useState<'menu' | 'reschedule'>('menu')
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleHour, setRescheduleHour] = useState('')
+  const [rescheduleScope, setRescheduleScope] = useState<'single' | 'series'>('single')
   const [dayCitas, setDayCitas] = useState<any[]>([]) // ocupación del día elegido al reprogramar
   const [loadingDay, setLoadingDay] = useState(false)
 
@@ -104,16 +109,16 @@ export default function AgendaPage() {
     isOpen: false, type: 'success', title: '', message: ''
   })
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const day = addDays(startOfCurrentWeek, i)
-    const labels = { 'lun': 'L', 'mar': 'M', 'mié': 'M', 'jue': 'J', 'vie': 'V', 'sáb': 'S', 'dom': 'D' } as any
-    const fullLabel = format(day, 'eee', { locale: es }).replace('.', '').toLowerCase()
+  const weekDays = Array.from({ length: 6 }, (_, i) => {
+    const labels = { 'lun': 'L', 'mar': 'M', 'mié': 'M', 'jue': 'J', 'vie': 'V', 'dom': 'D' } as any
+    const actualDay = addDays(startOfCurrentWeek, i === 5 ? 6 : i)
+    const fullLabel = format(actualDay, 'eee', { locale: es }).replace('.', '').toLowerCase()
     return {
       label: fullLabel,
       shortLabel: labels[fullLabel] || fullLabel[0].toUpperCase(),
-      num: format(day, 'd'),
-      fecha: format(day, 'yyyy-MM-dd'),
-      today: isSameDay(day, now)
+      num: format(actualDay, 'd'),
+      fecha: format(actualDay, 'yyyy-MM-dd'),
+      today: isSameDay(actualDay, now)
     }
   })
 
@@ -289,6 +294,7 @@ export default function AgendaPage() {
   // Abrir el modo reprogramar: precarga fecha/hora y la ocupación de ese día
   const openReschedule = async (cita: any) => {
     setPanelMode('reschedule')
+    setRescheduleScope('single')
     const fecha = cita.fecha
     const hora = cita.hora_inicio.slice(0, 5)
     setRescheduleDate(fecha)
@@ -322,17 +328,23 @@ export default function AgendaPage() {
   // Reprogramar: reinicia banderas de notificación para que el cron avise con la hora nueva
   const applyReschedule = async () => {
     if (!selectedCita || !rescheduleDate || !rescheduleHour) return
+    if (esSabado(rescheduleDate)) {
+      setNotification({ isOpen: true, type: 'error', title: 'Día no disponible', message: 'Los sábados no hay atención. Elige otro día.' })
+      return
+    }
     setSaving(true)
     try {
       let planAppointments: SeriesAppointment[] = [selectedCita]
-      if (selectedCita.sesion_id) {
+      if (selectedCita.sesion_id && rescheduleScope === 'series') {
         const { data, error } = await supabase.from('citas')
           .select('id,fecha,hora_inicio,estado,notas,duracion_minutos,fisioterapeuta')
           .eq('sesion_id', selectedCita.sesion_id)
         if (error) throw error
         planAppointments = (data || []) as SeriesAppointment[]
       }
-      const changes = planAppointmentSeriesReschedule(planAppointments, selectedCita.id, rescheduleDate, rescheduleHour)
+      const changes = (rescheduleScope === 'series' && selectedCita.sesion_id
+        ? planAppointmentSeriesReschedule(planAppointments, selectedCita.id, rescheduleDate, rescheduleHour)
+        : [{ id: selectedCita.id, fecha: rescheduleDate, hora_inicio: rescheduleHour }])
         .map(change => ({ ...change, ...(change.id === selectedCita.id ? { estado: 'pendiente' } : {}) }))
       const targetDates = Array.from(new Set(changes.map(change => change.fecha)))
       const { data: busyAppointments, error: busyError } = await supabase.from('citas')
@@ -463,8 +475,8 @@ export default function AgendaPage() {
           </div>
 
           <div className="relative overflow-x-auto scrollbar-hide rounded-[24px] sm:rounded-[30px] border border-rose-50/50 -mx-2 sm:mx-0">
-            <div className="min-w-[850px] sm:min-w-full">
-              <div className="grid grid-cols-[40px_repeat(7,1fr)] sm:grid-cols-[60px_repeat(7,1fr)] gap-0.5 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-2 sm:py-4 px-1 sm:px-2">
+            <div className="min-w-[680px] sm:min-w-full">
+              <div className="grid grid-cols-[44px_repeat(6,minmax(100px,1fr))] sm:grid-cols-[60px_repeat(6,1fr)] gap-1 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-3 sm:py-4 px-1 sm:px-2">
                 <div className="bg-rose-50/50 rounded-lg flex items-center justify-center text-[7px] sm:text-[10px] font-black text-rose-300 uppercase tracking-widest">H</div>
                 {weekDays.map(d => (
                   <div key={d.fecha} className="text-center group">
@@ -479,10 +491,10 @@ export default function AgendaPage() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-[40px_repeat(7,1fr)] sm:grid-cols-[60px_repeat(7,1fr)] gap-0.5 sm:gap-2 pb-4 px-1 sm:px-2">
+              <div className="grid grid-cols-[44px_repeat(6,minmax(100px,1fr))] sm:grid-cols-[60px_repeat(6,1fr)] gap-1 sm:gap-2 pb-4 px-1 sm:px-2">
                 {HORAS.map(hora => (
                   <div key={hora} className="contents">
-                    <div className="text-[8px] sm:text-[10px] font-black text-rose-300 flex items-center justify-center h-12 sm:h-20 tracking-tighter border-r border-rose-50/50 sticky left-0 bg-white/95 backdrop-blur-sm z-10 pr-1 sm:pr-2">
+                    <div className="text-[8px] sm:text-[10px] font-black text-rose-300 flex items-center justify-center h-16 sm:h-20 tracking-tighter border-r border-rose-50/50 sticky left-0 bg-white/95 backdrop-blur-sm z-10 pr-1 sm:pr-2">
                       <span className="hidden sm:inline">{format12h(hora)}</span>
                       <span className="inline sm:hidden">{format12h(hora).replace(' ', '').replace(':00', '')}</span>
                     </div>
@@ -500,7 +512,7 @@ export default function AgendaPage() {
                       if (citasSlot.length > 0) {
                         const multi = citasSlot.length > 1
                         return (
-                          <div key={`${d.fecha}-${hora}`} className="h-12 sm:h-20 p-[1px] sm:p-0.5 flex flex-col gap-0.5">
+                          <div key={`${d.fecha}-${hora}`} className="h-16 sm:h-20 p-[1px] sm:p-0.5 flex flex-col gap-0.5">
                             {citasSlot.map(cita => {
                               const p = cita.pacientes as any
                               const sessionInfo = cita.notas?.split('.')[0]
@@ -525,13 +537,13 @@ export default function AgendaPage() {
                       }
                       if (!isWorkingHour) {
                         return (
-                          <div key={`${d.fecha}-${hora}`} className="h-12 sm:h-20 p-[1px] sm:p-0.5 opacity-25">
+                          <div key={`${d.fecha}-${hora}`} className="h-16 sm:h-20 p-[1px] sm:p-0.5 opacity-25">
                             <div className="h-full w-full rounded-[8px] sm:rounded-[20px] bg-slate-100/40 border border-slate-200/20 cursor-not-allowed" />
                           </div>
                         )
                       }
                       return (
-                        <div key={`${d.fecha}-${hora}`} className="h-12 sm:h-20 p-[1px] sm:p-0.5">
+                        <div key={`${d.fecha}-${hora}`} className="h-16 sm:h-20 p-[1px] sm:p-0.5">
                           <div className="h-full w-full rounded-[8px] sm:rounded-[20px] border border-dashed border-rose-50/20 hover:border-rose-100 transition-colors" />
                         </div>
                       )
@@ -687,12 +699,46 @@ export default function AgendaPage() {
               </div>
             ) : (
               <div className="p-6 space-y-5">
+                {selectedCita.sesion_id && (
+                  <fieldset className="space-y-2">
+                    <legend className="text-[9px] font-black text-rose-300 uppercase tracking-widest">¿Qué citas quieres mover?</legend>
+                    <div className="grid grid-cols-1 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRescheduleScope('single')}
+                        aria-pressed={rescheduleScope === 'single'}
+                        className={`rounded-xl border p-3 text-left transition-colors ${rescheduleScope === 'single' ? 'border-rose-400 bg-rose-50 text-rose-900' : 'border-rose-100 bg-white text-slate-600'}`}
+                      >
+                        <span className="block text-[10px] font-black uppercase tracking-widest">Solo esta cita</span>
+                        <span className="mt-1 block text-[10px] font-medium">Las demás sesiones conservan su fecha.</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRescheduleScope('series')}
+                        aria-pressed={rescheduleScope === 'series'}
+                        className={`rounded-xl border p-3 text-left transition-colors ${rescheduleScope === 'series' ? 'border-rose-400 bg-rose-50 text-rose-900' : 'border-rose-100 bg-white text-slate-600'}`}
+                      >
+                        <span className="block text-[10px] font-black uppercase tracking-widest">Esta y las siguientes</span>
+                        <span className="mt-1 block text-[10px] font-medium">Mueve las sesiones pendientes posteriores del plan.</span>
+                      </button>
+                    </div>
+                  </fieldset>
+                )}
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Nueva fecha</label>
                   <input
                     type="date"
                     value={rescheduleDate}
-                    onChange={(e) => { setRescheduleDate(e.target.value); setRescheduleHour(''); loadDayCitas(e.target.value) }}
+                    onChange={(e) => {
+                      const fecha = e.target.value
+                      if (esSabado(fecha)) {
+                        setNotification({ isOpen: true, type: 'error', title: 'Día no disponible', message: 'Los sábados no hay atención. Elige otro día.' })
+                        return
+                      }
+                      setRescheduleDate(fecha)
+                      setRescheduleHour('')
+                      if (fecha) void loadDayCitas(fecha)
+                    }}
                     className="w-full bg-rose-50/50 border border-rose-100 rounded-xl px-4 py-3 text-sm font-black text-rose-950 focus:ring-2 focus:ring-rose-200 outline-none"
                   />
                 </div>
