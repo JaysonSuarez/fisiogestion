@@ -85,6 +85,7 @@ export default function AgendaPage() {
 
   const now = new Date()
   const [startOfCurrentWeek, setStartOfCurrentWeek] = useState(startOfWeek(now, { weekStartsOn: 1 }))
+  const [mobileDayPage, setMobileDayPage] = useState(0)
   const todayDateStr = format(now, 'yyyy-MM-dd')
 
   // Verificación de asistencia (citas pasadas)
@@ -121,6 +122,81 @@ export default function AgendaPage() {
       today: isSameDay(actualDay, now)
     }
   })
+
+  const mobileDays = weekDays.slice(mobileDayPage * 2, mobileDayPage * 2 + 2)
+
+  const renderCalendarGrid = (days: typeof weekDays, compact: boolean) => {
+    const columns = compact
+      ? 'grid-cols-[42px_repeat(2,minmax(0,1fr))]'
+      : 'grid-cols-[60px_repeat(6,minmax(0,1fr))]'
+
+    return (
+      <>
+        <div className={`grid ${columns} gap-1 lg:gap-2 mb-2 lg:mb-4 bg-white/95 backdrop-blur-md z-20 py-2 lg:py-4 px-1 lg:px-2`}>
+          <div className="bg-rose-50/50 rounded-lg flex items-center justify-center text-[8px] lg:text-[10px] font-black text-rose-300 uppercase tracking-widest">H</div>
+          {days.map(d => (
+            <div key={d.fecha} className="text-center">
+              <div className={`text-[9px] lg:text-[9px] font-black uppercase tracking-wider lg:tracking-[0.2em] mb-1 lg:mb-2 ${d.today ? 'text-rose-600' : 'text-rose-300'}`}>
+                {d.label}
+              </div>
+              <div className={`w-8 h-8 lg:w-12 lg:h-12 mx-auto rounded-xl lg:rounded-[18px] flex items-center justify-center text-xs lg:text-lg font-black ${d.today ? 'bg-rose-600 text-white shadow-lg shadow-rose-200' : 'bg-rose-50/50 text-rose-950'}`}>
+                {d.num}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className={`grid ${columns} gap-1 lg:gap-2 pb-3 lg:pb-4 px-1 lg:px-2`}>
+          {HORAS.map(hora => (
+            <div key={hora} className="contents">
+              <div className="text-[8px] lg:text-[10px] font-black text-rose-300 flex items-center justify-center h-16 lg:h-20 tracking-tighter border-r border-rose-50/50 bg-white/95 pr-1 lg:pr-2">
+                {compact ? format12h(hora).replace(' ', '').replace(':00', '') : format12h(hora)}
+              </div>
+              {days.map(d => {
+                const isWorkingHour = horasLaborales(d.fecha).includes(hora)
+                const citasSlot = citas.filter(c =>
+                  c.fecha === d.fecha &&
+                  c.hora_inicio.split(':')[0] === hora.split(':')[0] &&
+                  c.estado !== 'cancelada'
+                )
+
+                if (citasSlot.length > 0) {
+                  const multi = citasSlot.length > 1
+                  return (
+                    <div key={`${d.fecha}-${hora}`} className="h-16 lg:h-20 p-0.5 flex flex-col gap-0.5">
+                      {citasSlot.map(cita => {
+                        const p = cita.pacientes as any
+                        const sessionInfo = cita.notas?.split('.')[0]
+                        const isCompleted = esCompletada(cita.estado)
+                        return (
+                          <button key={cita.id} onClick={() => openPanel(cita)} className={`flex-1 min-h-0 w-full text-left rounded-lg lg:rounded-[20px] ${compact ? 'px-1 py-1' : 'p-2'} flex flex-col justify-center cursor-pointer transition-colors shadow-rose-100/20 relative overflow-hidden ${isCompleted ? 'bg-lime-50 border border-lime-100' : 'bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
+                            {!multi && (
+                              <span className={`absolute top-0 right-0 p-0.5 text-[6px] lg:text-[7px] font-black uppercase tracking-wide ${isCompleted ? 'text-lime-500' : 'text-rose-500'}`}>{sessionInfo}</span>
+                            )}
+                            <span className={`${compact ? (multi ? 'text-[8px]' : 'text-[9px]') : (multi ? 'text-[9px]' : 'text-[10px]')} font-black truncate tracking-tight leading-tight ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</span>
+                            <span className={`${compact ? 'text-[7px]' : 'text-[8px]'} font-bold uppercase mt-0.5 truncate ${isCompleted ? 'text-lime-600' : 'text-rose-500'}`}>
+                              {format12h(cita.hora_inicio)}{!multi && ` · ${cita.duracion_minutos}m`}
+                              {cita.fisioterapeuta && esDuena(fisioActiva) && ` · ${cita.fisioterapeuta}`}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={`${d.fecha}-${hora}`} className={`h-16 lg:h-20 p-0.5 ${!isWorkingHour ? 'opacity-25' : ''}`}>
+                    <div className={`h-full w-full rounded-lg lg:rounded-[20px] ${isWorkingHour ? 'border border-dashed border-rose-100/50' : 'bg-slate-100/50 border border-slate-200/30'}`} />
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </>
+    )
+  }
 
   async function loadCitas() {
     const cacheKey = `agenda-${format(startOfCurrentWeek, 'yyyy-MM-dd')}`
@@ -441,7 +517,7 @@ export default function AgendaPage() {
 
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
         <div>
-          <h2 className="font-display italic text-5xl mb-2 flex items-center gap-3 text-rose-950">
+          <h2 className="font-display italic text-3xl sm:text-5xl mb-2 flex items-center gap-3 text-rose-950">
             <CalendarIcon className="text-rose-400" size={36} />
             Calendario
           </h2>
@@ -449,11 +525,11 @@ export default function AgendaPage() {
         </div>
 
         <div className="flex items-center gap-3 bg-white p-2 rounded-[24px] shadow-lg shadow-rose-100/20 border border-rose-50">
-           <button onClick={() => setStartOfCurrentWeek(d => addDays(d, -7))} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-rose-50 text-rose-300 transition-colors">
+           <button onClick={() => { setMobileDayPage(0); setStartOfCurrentWeek(d => addDays(d, -7)) }} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-rose-50 text-rose-300 transition-colors">
              <ChevronLeft size={20} />
            </button>
            <span className="text-xs font-black text-rose-950 uppercase tracking-widest px-2">Semana Actual</span>
-           <button onClick={() => setStartOfCurrentWeek(d => addDays(d, 7))} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-rose-50 text-rose-300 transition-colors">
+           <button onClick={() => { setMobileDayPage(0); setStartOfCurrentWeek(d => addDays(d, 7)) }} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-rose-50 text-rose-300 transition-colors">
              <ChevronRight size={20} />
            </button>
         </div>
@@ -462,105 +538,57 @@ export default function AgendaPage() {
       <div className="space-y-8">
         {/* Grilla semanal */}
         <div className="card border-none shadow-[0_20px_50px_-12px_rgba(225,29,72,0.15)] bg-white/80 backdrop-blur-md rounded-[32px] sm:rounded-[40px] p-2 sm:p-8">
-          <div className="flex items-center justify-between mb-6 sm:mb-8 px-2 sm:px-0">
+          <div className="flex items-center justify-between mb-4 lg:mb-8 px-2 lg:px-0">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="hidden sm:flex p-3 sm:p-4 bg-rose-600 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-rose-200">
+              <div className="hidden lg:flex p-3 sm:p-4 bg-rose-600 text-white rounded-[16px] sm:rounded-[20px] shadow-lg shadow-rose-200">
                 <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <h3 className="font-black text-lg sm:text-2xl text-rose-950 tracking-tighter">
+              <h3 className="font-black text-base sm:text-xl lg:text-2xl text-rose-950 tracking-tight">
                 {format(startOfCurrentWeek, "d", { locale: es })} al {format(addDays(startOfCurrentWeek, 6), "d 'de' MMMM", { locale: es })}
               </h3>
             </div>
-            <Sparkles className="text-rose-300 animate-pulse hidden sm:block" size={24} />
+            <Sparkles className="text-rose-300 animate-pulse hidden lg:block" size={24} />
           </div>
 
-          <div className="relative overflow-x-auto scrollbar-hide rounded-[24px] sm:rounded-[30px] border border-rose-50/50 -mx-2 sm:mx-0">
-            <div className="min-w-[680px] sm:min-w-full">
-              <div className="grid grid-cols-[44px_repeat(6,minmax(100px,1fr))] sm:grid-cols-[60px_repeat(6,1fr)] gap-1 sm:gap-2 mb-2 sm:mb-4 sticky top-0 bg-white/95 backdrop-blur-md z-20 py-3 sm:py-4 px-1 sm:px-2">
-                <div className="bg-rose-50/50 rounded-lg flex items-center justify-center text-[7px] sm:text-[10px] font-black text-rose-300 uppercase tracking-widest">H</div>
-                {weekDays.map(d => (
-                  <div key={d.fecha} className="text-center group">
-                    <div className={`text-[8px] sm:text-[9px] font-black uppercase tracking-[0.2em] mb-1 sm:mb-2 ${d.today ? 'text-rose-600' : 'text-rose-300 transition-colors'}`}>
-                      <span className="hidden sm:inline">{d.label}</span>
-                      <span className="inline sm:hidden">{d.shortLabel}</span>
-                    </div>
-                    <div className={`w-7 h-7 sm:w-12 sm:h-12 mx-auto rounded-[10px] sm:rounded-[18px] flex items-center justify-center text-[10px] sm:text-lg font-black transition-all ${d.today ? 'bg-rose-600 text-white shadow-xl shadow-rose-300' : 'bg-rose-50/30 text-rose-950'}`}>
-                      {d.num}
-                    </div>
-                  </div>
-                ))}
+          <div className="lg:hidden rounded-[24px] border border-rose-100 bg-white overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-3 bg-rose-50/70 border-b border-rose-100">
+              <button
+                type="button"
+                aria-label="Días anteriores de esta semana"
+                disabled={mobileDayPage === 0}
+                onClick={() => setMobileDayPage(page => Math.max(0, page - 1))}
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-rose-600 disabled:text-rose-200 disabled:bg-transparent bg-white shadow-sm"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="text-center">
+                <p className="text-xs font-black text-rose-950 uppercase tracking-wide">
+                  {mobileDays.map(day => `${day.label} ${day.num}`).join(' · ')}
+                </p>
+                <p className="text-[10px] font-bold text-rose-400 mt-0.5">Bloque {mobileDayPage + 1} de 3</p>
               </div>
-
-              <div className="grid grid-cols-[44px_repeat(6,minmax(100px,1fr))] sm:grid-cols-[60px_repeat(6,1fr)] gap-1 sm:gap-2 pb-4 px-1 sm:px-2">
-                {HORAS.map(hora => (
-                  <div key={hora} className="contents">
-                    <div className="text-[8px] sm:text-[10px] font-black text-rose-300 flex items-center justify-center h-16 sm:h-20 tracking-tighter border-r border-rose-50/50 sticky left-0 bg-white/95 backdrop-blur-sm z-10 pr-1 sm:pr-2">
-                      <span className="hidden sm:inline">{format12h(hora)}</span>
-                      <span className="inline sm:hidden">{format12h(hora).replace(' ', '').replace(':00', '')}</span>
-                    </div>
-                    {weekDays.map(d => {
-                      const laborales = horasLaborales(d.fecha)
-                      const isWorkingHour = laborales.includes(hora)
-
-                      // Todas las citas de la franja: si dos fisioterapeutas coinciden en
-                      // la misma hora, se muestran apiladas en la celda.
-                      const citasSlot = citas.filter(c =>
-                        c.fecha === d.fecha &&
-                        c.hora_inicio.split(':')[0] === hora.split(':')[0] &&
-                        c.estado !== 'cancelada'
-                      )
-                      if (citasSlot.length > 0) {
-                        const multi = citasSlot.length > 1
-                        return (
-                          <div key={`${d.fecha}-${hora}`} className="h-16 sm:h-20 p-[1px] sm:p-0.5 flex flex-col gap-0.5">
-                            {citasSlot.map(cita => {
-                              const p = cita.pacientes as any
-                              const sessionInfo = cita.notas?.split('.')[0]
-                              const isCompleted = esCompletada(cita.estado)
-                              return (
-                                <button key={cita.id} onClick={() => openPanel(cita)} className={`flex-1 min-h-0 w-full text-left rounded-[8px] sm:rounded-[20px] ${multi ? 'px-1 py-0.5 sm:px-2 sm:py-1' : 'p-0.5 sm:p-2'} flex flex-col justify-center cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg shadow-rose-100/20 group relative overflow-hidden ${isCompleted ? 'bg-lime-50 border border-lime-100 shadow-lime-100/30' : 'bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
-                                  {!multi && (
-                                    <div className="absolute top-0 right-0 p-0.5 opacity-50 group-hover:opacity-100 transition-opacity">
-                                      <span className={`text-[5px] sm:text-[7px] font-black uppercase tracking-widest ${isCompleted ? 'text-lime-400' : 'text-rose-500'}`}>{sessionInfo}</span>
-                                    </div>
-                                  )}
-                                  <div className={`${multi ? 'text-[6px] sm:text-[9px]' : 'text-[7px] sm:text-[10px]'} font-black truncate tracking-tight leading-none ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</div>
-                                  <div className={`${multi ? 'text-[5px] sm:text-[7px]' : 'text-[6px] sm:text-[8px]'} font-bold tracking-widest uppercase mt-0.5 truncate ${isCompleted ? 'text-lime-600' : 'text-rose-400'}`}>
-                                    {format12h(cita.hora_inicio)}{!multi && ` · ${cita.duracion_minutos}m`}
-                                    {cita.fisioterapeuta && esDuena(fisioActiva) && ` · ${cita.fisioterapeuta}`}
-                                  </div>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )
-                      }
-                      if (!isWorkingHour) {
-                        return (
-                          <div key={`${d.fecha}-${hora}`} className="h-16 sm:h-20 p-[1px] sm:p-0.5 opacity-25">
-                            <div className="h-full w-full rounded-[8px] sm:rounded-[20px] bg-slate-100/40 border border-slate-200/20 cursor-not-allowed" />
-                          </div>
-                        )
-                      }
-                      return (
-                        <div key={`${d.fecha}-${hora}`} className="h-16 sm:h-20 p-[1px] sm:p-0.5">
-                          <div className="h-full w-full rounded-[8px] sm:rounded-[20px] border border-dashed border-rose-50/20 hover:border-rose-100 transition-colors" />
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
+              <button
+                type="button"
+                aria-label="Días siguientes de esta semana"
+                disabled={mobileDayPage === 2}
+                onClick={() => setMobileDayPage(page => Math.min(2, page + 1))}
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-rose-600 disabled:text-rose-200 disabled:bg-transparent bg-white shadow-sm"
+              >
+                <ChevronRight size={20} />
+              </button>
             </div>
+            <div className="px-1 py-2">{renderCalendarGrid(mobileDays, true)}</div>
           </div>
 
-          <div className="mt-6 flex items-center justify-center gap-4 sm:hidden">
+          <div className="hidden lg:block rounded-[28px] border border-rose-50/50 bg-white/70 overflow-hidden">
+            <div className="px-2 py-2">{renderCalendarGrid(weekDays, false)}</div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-center gap-4 lg:hidden">
              <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-rose-500"></div>
                 <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Toca una cita</span>
              </div>
-             <div className="w-[1px] h-4 bg-rose-100"></div>
-             <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest font-black">← Desliza →</span>
           </div>
         </div>
 
