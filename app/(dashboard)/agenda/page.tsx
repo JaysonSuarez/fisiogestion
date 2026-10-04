@@ -171,7 +171,7 @@ export default function AgendaPage() {
                         return (
                           <button key={cita.id} onClick={() => openPanel(cita)} className={`flex-1 min-h-0 w-full text-left rounded-lg lg:rounded-[20px] ${compact ? 'px-1 py-1' : 'p-2'} flex flex-col justify-center cursor-pointer transition-colors shadow-rose-100/20 relative overflow-hidden ${isCompleted ? 'bg-lime-50 border border-lime-100' : 'bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
                             {!multi && (
-                              <span className={`absolute top-0 right-0 p-0.5 text-[6px] lg:text-[7px] font-black uppercase tracking-wide ${isCompleted ? 'text-lime-500' : 'text-rose-500'}`}>{sessionInfo}</span>
+                              <span className={`absolute top-1 right-1 max-w-[80%] truncate rounded-full px-1 py-0.5 text-[5px] lg:text-[7px] font-black uppercase tracking-normal ${isCompleted ? 'bg-lime-100 text-lime-700' : 'bg-rose-100 text-rose-600'}`} title={sessionInfo}>{sessionInfo}</span>
                             )}
                             <span className={`${compact ? (multi ? 'text-[8px]' : 'text-[9px]') : (multi ? 'text-[9px]' : 'text-[10px]')} font-black truncate tracking-tight leading-tight ${isCompleted ? 'text-lime-700' : 'text-rose-950'}`}>{p?.nombre}</span>
                             <span className={`${compact ? 'text-[7px]' : 'text-[8px]'} font-bold uppercase mt-0.5 truncate ${isCompleted ? 'text-lime-600' : 'text-rose-500'}`}>
